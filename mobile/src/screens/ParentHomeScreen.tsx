@@ -8,8 +8,10 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  Alert,
+   Alert,
+  Image,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function ParentHomeScreen() {
   const tasks = [
@@ -38,37 +40,49 @@ export default function ParentHomeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* FIXED HEADER */}
-      <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <View style={styles.brandIcon}>
-            <Text style={styles.brandSymbol}>◎</Text>
-          </View>
+{/* FIXED HEADER */}
+<View style={styles.header}>
+  <View style={styles.brandRow}>
+    <Image
+      source={require("../../assets/QQ LOGO.png")}
+      style={styles.brandLogo}
+      resizeMode="cover"
+    />
 
-          <Text style={styles.headerTitle}>Quiet Cue</Text>
-        </View>
+    <Text style={styles.headerTitle}>Quiet Cue</Text>
+  </View>
 
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() =>
-              Alert.alert(
-                "Notifications",
-                "Notifications will be added soon."
-              )
-            }
-          >
-            <Text style={styles.headerIcon}>♟</Text>
-          </Pressable>
+  <View style={styles.headerActions}>
+    <Pressable
+      accessibilityLabel="Notifications"
+      onPress={() =>
+        Alert.alert(
+          "Notifications",
+          "Notifications will be added soon."
+        )
+      }
+    >
+      <Ionicons
+        name="notifications-outline"
+        size={25}
+        color="#FFFFFF"
+      />
+    </Pressable>
 
-          <Pressable
-            onPress={() =>
-              Alert.alert("Menu", "Menu options will be added soon.")
-            }
-          >
-            <Text style={styles.headerIcon}>☰</Text>
-          </Pressable>
-        </View>
-      </View>
+    <Pressable
+      accessibilityLabel="Menu"
+      onPress={() =>
+        Alert.alert("Menu", "Menu options will be added soon.")
+      }
+    >
+      <Ionicons
+        name="menu-outline"
+        size={28}
+        color="#FFFFFF"
+      />
+    </Pressable>
+  </View>
+</View>
 
       {/* SCROLLABLE CONTENT */}
       <ScrollView
@@ -194,21 +208,14 @@ const styles = StyleSheet.create({
     gap: 5,
   },
 
-  brandIcon: {
-    width: 23,
-    height: 23,
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  brandSymbol: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "700",
-  },
+  brandLogo: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: "#FFFFFF",
+  borderWidth: 1,
+  borderColor: "#FFFFFF",
+},
 
   headerTitle: {
     color: "#FFFFFF",
@@ -216,10 +223,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  headerActions: {
-    flexDirection: "row",
-    gap: 16,
-  },
+headerActions: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 20,
+},
 
   headerIcon: {
     color: "#FFFFFF",
