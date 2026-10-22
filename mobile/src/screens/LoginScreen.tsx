@@ -17,9 +17,14 @@ import {
 
 type Props = {
   onSignUp: () => void;
+  onLogin: () => void;
 };
 
-export default function LoginScreen({ onSignUp }: Props) {
+export default function LoginScreen({
+  onSignUp,
+  onLogin,
+}: Props) {
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -143,12 +148,17 @@ export default function LoginScreen({ onSignUp }: Props) {
 
               <Pressable
                 style={styles.loginButton}
-                onPress={() =>
-                  Alert.alert(
-                    "QuietCue",
-                    "Login UI is ready. Authentication will be added later."
-                  )
-                }
+                onPress={() => {
+                  if (!email.trim() || !password.trim()) {
+                    Alert.alert(
+                      "Missing Information",
+                      "Please enter your email and password."
+                    );
+                    return;
+                  }
+
+                  onLogin();
+                }}
               >
                 <Text style={styles.loginText}>Log In</Text>
               </Pressable>
