@@ -13,7 +13,16 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function ParentHomeScreen() {
+type Props = {
+  onTasksPress: () => void;
+  onLogout: () => void;
+};
+
+export default function ParentHomeScreen({
+  onTasksPress,
+  onLogout,
+}: Props) {
+    
   const tasks = [
     "Project for AppDev",
     "Client layout",
@@ -38,7 +47,6 @@ export default function ParentHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
 
 {/* FIXED HEADER */}
 <View style={styles.header}>
@@ -72,8 +80,19 @@ export default function ParentHomeScreen() {
     <Pressable
       accessibilityLabel="Menu"
       onPress={() =>
-        Alert.alert("Menu", "Menu options will be added soon.")
-      }
+        Alert.alert(
+            "QuietCue Menu",
+            "What would you like to do?",
+            [
+            { text: "Cancel", style: "cancel" },
+            {
+                text: "Logout",
+                style: "destructive",
+                onPress: onLogout,
+            },
+            ]
+        )
+        }
     >
       <Ionicons
         name="menu-outline"
@@ -92,16 +111,20 @@ export default function ParentHomeScreen() {
       >
         {/* PARENT PROFILE */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
+        <View style={styles.avatar}>
             <Text style={styles.avatarText}>👩</Text>
-          </View>
+        </View>
 
-          <View>
+        <View style={styles.profileInfo}>
             <Text style={styles.parentName}>Parent: Taylor Swift</Text>
+
+            <View style={styles.statusRow}>
+            <View style={styles.busyDot} />
             <Text style={styles.statusText}>
-              🔴 Busy | Available at 6:00 PM
+                Busy  |  Available at 6:00 PM
             </Text>
-          </View>
+            </View>
+        </View>
         </View>
 
         {/* FOCUS AND TASKS */}
@@ -120,281 +143,448 @@ export default function ParentHomeScreen() {
               <View style={[styles.progressFill, { width: "35%" }]} />
             </View>
 
-            <Pressable style={styles.startButton}>
-              <Text style={styles.startButtonText}>Start Session</Text>
-            </Pressable>
+            <Pressable
+                style={({ pressed }) => [
+                    styles.startButton,
+                    pressed && styles.startButtonPressed,
+                ]}
+                onPress={() =>
+                    Alert.alert(
+                    "Focus Session",
+                    "Pomodoro focus timer will be available soon."
+                    )
+                }
+                >
+                <Ionicons name="play-circle-outline" size={17} color="#FFFFFF" />
+                <Text style={styles.startButtonText}>Start Session</Text>
+                </Pressable>
           </View>
 
-          <View style={styles.tasksCard}>
+            <View style={styles.tasksCard}>
             <Text style={styles.cardTitle}>Today's Tasks</Text>
 
             {tasks.map((task, index) => (
-              <Text key={index} style={styles.taskText}>
-                ☑ {task}
-              </Text>
+                <View key={index} style={styles.taskRow}>
+                <Ionicons
+                    name="checkbox-outline"
+                    size={14}
+                    color="#B53166"
+                />
+
+                <Text style={styles.taskText}>{task}</Text>
+                </View>
             ))}
 
-            <Text style={styles.viewAll}>View All</Text>
+            <Pressable
+            onPress={onTasksPress}
+            >
+                <Text style={styles.viewAll}>View All</Text>
+             </Pressable>
           </View>
         </View>
-
         {/* PENDING REQUESTS */}
         <Text style={styles.sectionTitle}>Pending Requests</Text>
 
-        {requests.map((request, index) => (
-          <View key={index} style={styles.requestCard}>
+        {requests.map((request, index) => {
+        const isHighPriority = request.priority === "High Priority";
+
+        return (
+            <View key={index} style={styles.requestCard}>
             <Text style={styles.requestText}>
-              <Text style={styles.bold}>{request.name}</Text> (Daughter) is
-              requesting for {request.message}
+                <Text style={styles.bold}>{request.name}</Text> (Daughter) is
+                requesting for {request.message}
             </Text>
 
-            <Text style={styles.priority}>{request.priority}</Text>
-          </View>
-        ))}
+            <View
+                style={[
+                styles.priorityBadge,
+                isHighPriority
+                    ? styles.highPriorityBadge
+                    : styles.mediumPriorityBadge,
+                ]}
+            >
+                <Text
+                style={[
+                    styles.priorityText,
+                    isHighPriority
+                    ? styles.highPriorityText
+                    : styles.mediumPriorityText,
+                ]}
+                >
+                {request.priority}
+                </Text>
+            </View>
+            </View>
+        );
+        })}
 
         {/* FAMILY OVERVIEW */}
         <Text style={styles.sectionTitle}>Family Overview</Text>
 
-        {family.map((member, index) => (
-          <View key={index} style={styles.familyCard}>
+        {family.map((member, index) => {
+        const statusColor =
+            member.status === "Focusing"
+            ? "#D94C72"
+            : member.status === "On Break"
+            ? "#E5A32B"
+            : "#39A879";
+
+        return (
+            <View key={index} style={styles.familyCard}>
             <View style={styles.familyAvatar}>
-              <Text>👩</Text>
+                <Text style={styles.familyAvatarText}>👩</Text>
             </View>
 
             <View style={styles.familyInfo}>
-              <Text style={styles.familyName}>{member.name}</Text>
-              <Text style={styles.familyStatus}>
-                Status: {member.status}
-              </Text>
+                <Text style={styles.familyName}>{member.name}</Text>
+
+                <View style={styles.familyStatusRow}>
+                <View
+                    style={[
+                    styles.familyStatusDot,
+                    { backgroundColor: statusColor },
+                    ]}
+                />
+                <Text style={styles.familyStatus}>
+                    {member.status}
+                </Text>
+                </View>
             </View>
 
-            <Text style={styles.arrow}>›</Text>
-          </View>
-        ))}
+            <Ionicons
+                name="chevron-forward"
+                size={20}
+                color="#E45D92"
+            />
+            </View>
+        );
+        })}
+
       </ScrollView>
 
-      {/* FIXED BOTTOM NAVIGATION */}
-      <View style={styles.bottomBar}>
-        <Text style={styles.navItem}>⌂{"\n"}Home</Text>
-        <Text style={styles.navItem}>▤{"\n"}Tasks</Text>
-        <Text style={styles.navItem}>◷{"\n"}Focus</Text>
-        <Text style={styles.navItem}>✉{"\n"}Messages</Text>
-      </View>
+ {/* FIXED BOTTOM NAVIGATION */}
+<View style={styles.bottomBar}>
+
+  {/* HOME */}
+  <View style={styles.activeNavItem}>
+    <Ionicons name="home" size={23} color="#FFFFFF" />
+    <Text style={styles.navText}>Home</Text>
+  </View>
+
+  {/* TASKS */}
+  <Pressable
+    style={styles.navButton}
+    onPress={() => {
+      console.log("TASKS PRESSED", typeof onTasksPress);
+      onTasksPress();
+    }}
+  >
+    <Ionicons name="checkbox-outline" size={23} color="#FFFFFF" />
+    <Text style={styles.navText}>Tasks</Text>
+  </Pressable>
+
+  {/* FOCUS */}
+  <Pressable
+    style={styles.navButton}
+    onPress={() =>
+      Alert.alert("Focus", "Focus screen coming soon.")
+    }
+  >
+    <Ionicons name="timer-outline" size={23} color="#FFFFFF" />
+    <Text style={styles.navText}>Focus</Text>
+  </Pressable>
+
+  {/* MESSAGES */}
+  <Pressable
+    style={styles.navButton}
+    onPress={() =>
+      Alert.alert("Messages", "Messages screen coming soon.")
+    }
+  >
+    <Ionicons name="chatbubble-outline" size={23} color="#FFFFFF" />
+    <Text style={styles.navText}>Messages</Text>
+  </Pressable>
+
+</View>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFF8FB",
-  },
+        container: {
+            flex: 1,
+            backgroundColor: "#FFF8FB",
+        },
 
-  header: {
-    backgroundColor: "#D45A88",
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 22,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+        header: {
+            backgroundColor: "#D45A88",
+            paddingHorizontal: 22,
+            paddingTop: 20,
+            paddingBottom: 22,
+            borderBottomLeftRadius: 28,
+            borderBottomRightRadius: 28,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+        },
 
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
+        brandRow: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+        },
 
-  brandLogo: {
-  width: 36,
-  height: 36,
-  borderRadius: 18,
-  backgroundColor: "#FFFFFF",
-  borderWidth: 1,
-  borderColor: "#FFFFFF",
-},
+        brandLogo: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "#FFFFFF",
+        },
 
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
+        headerTitle: {
+            color: "#FFFFFF",
+            fontSize: 18,
+            fontWeight: "600",
+        },
 
-headerActions: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 20,
-},
+        headerActions: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 20,
+        },
 
-  headerIcon: {
-    color: "#FFFFFF",
-    fontSize: 23,
-  },
+        headerIcon: {
+            color: "#FFFFFF",
+            fontSize: 23,
+        },
 
-  scrollArea: {
-    flex: 1,
-  },
+        scrollArea: {
+            flex: 1,
+        },
 
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 15,
-    paddingBottom: 25,
-  },
+        scrollContent: {
+            paddingHorizontal: 16,
+            paddingTop: 15,
+            paddingBottom: 25,
+        },
 
-  profileCard: {
-    backgroundColor: "#F5A5C2",
-    borderRadius: 15,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
 
-  avatar: {
-    width: 46,
-    height: 46,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 23,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
+        profileCard: {
+            backgroundColor: "#F5A5C2",
+            borderRadius: 18,
+            paddingVertical: 16,
+            paddingHorizontal: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 14,
+            shadowColor: "#B54C78",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.12,
+            shadowRadius: 6,
+            elevation: 3,
+        },
 
-  avatarText: {
-    fontSize: 27,
-  },
+        avatar: {
+            width: 54,
+            height: 54,
+            backgroundColor: "#FFFFFF",
+            borderRadius: 27,
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: 14,
+        },
 
-  parentName: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#49303C",
-  },
+        avatarText: {
+            fontSize: 30,
+        },
 
-  statusText: {
-    fontSize: 10,
-    color: "#663E50",
-    marginTop: 5,
-  },
+        profileInfo: {
+            flex: 1,
+        },
 
-  cardsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
+        parentName: {
+            fontSize: 15,
+            fontWeight: "700",
+            color: "#49303C",
+        },
 
-  focusCard: {
-    flex: 1,
-    backgroundColor: "#FFE4EC",
-    borderWidth: 1,
-    borderColor: "#F38DB2",
-    borderRadius: 12,
-    padding: 10,
-  },
+        statusRow: {
+            flexDirection: "row",
+            alignItems: "center",
+            marginTop: 7,
+        },
 
-  tasksCard: {
-    flex: 1,
-    backgroundColor: "#FFE5EE",
-    borderRadius: 12,
-    padding: 10,
-  },
+        busyDot: {
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: "#D62839",
+            marginRight: 7,
+        },
 
-  cardTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#49303C",
-    textAlign: "center",
-    marginBottom: 12,
-  },
+        statusText: {
+            fontSize: 11,
+            color: "#663E50",
+            flexShrink: 1,
+        },
 
-  focusHours: {
-    color: "#B23465",
-    fontSize: 23,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 10,
-  },
+        cardsRow: {
+            flexDirection: "row",
+            gap: 8,
+        },
 
-  progressLabel: {
-    fontSize: 9,
-    color: "#6B4355",
-    marginBottom: 4,
-  },
+        focusCard: {
+            flex: 1,
+            backgroundColor: "#FFE4EC",
+            borderWidth: 1,
+            borderColor: "#F38DB2",
+            borderRadius: 12,
+            padding: 10,
+        },
 
-  progressBackground: {
-    height: 6,
-    backgroundColor: "#F4B7CD",
-    borderRadius: 6,
-    marginBottom: 8,
-  },
+        tasksCard: {
+            flex: 1,
+            backgroundColor: "#FFE5EE",
+            borderRadius: 12,
+            padding: 10,
+        },
 
-  progressFill: {
-    height: 6,
-    backgroundColor: "#B83669",
-    borderRadius: 6,
-  },
+        cardTitle: {
+            fontSize: 11,
+            fontWeight: "700",
+            color: "#49303C",
+            textAlign: "center",
+            marginBottom: 12,
+        },
 
-  startButton: {
-    backgroundColor: "#AD2F62",
+        focusHours: {
+            color: "#B23465",
+            fontSize: 23,
+            fontWeight: "700",
+            textAlign: "center",
+            marginBottom: 10,
+        },
+
+        progressLabel: {
+            fontSize: 9,
+            color: "#6B4355",
+            marginBottom: 4,
+        },
+
+        progressBackground: {
+            height: 6,
+            backgroundColor: "#F4B7CD",
+            borderRadius: 6,
+            marginBottom: 8,
+        },
+
+        progressFill: {
+            height: 6,
+            backgroundColor: "#B83669",
+            borderRadius: 6,
+        },
+
+        startButton: {
+        backgroundColor: "#AD2F62",
+        borderRadius: 22,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        marginTop: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        },
+
+        startButtonPressed: {
+        opacity: 0.75,
+        },
+
+        startButtonText: {
+        color: "#FFFFFF",
+        fontSize: 11,
+        fontWeight: "700",
+        },
+
+        taskRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 5,
+        marginBottom: 9,
+        },
+
+        taskText: {
+        flex: 1,
+        fontSize: 10,
+        color: "#593E4B",
+        lineHeight: 15,
+        },
+
+    viewAll: {
+        fontSize: 10,
+        color: "#B53166",
+        textAlign: "center",
+        marginTop: 5,
+        fontWeight: "600",
+    },
+
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#41353A",
+        marginTop: 18,
+        marginBottom: 9,
+    },
+
+    requestCard: {
+        backgroundColor: "#F3ECEF",
+        borderLeftWidth: 3,
+        borderLeftColor: "#F18BAF",
+        borderRadius: 10,
+        padding: 9,
+        marginBottom: 8,
+    },
+
+    requestText: {
+        fontSize: 11,
+        color: "#493A40",
+    },
+
+    bold: {
+        fontWeight: "700",
+    },
+
+    priorityBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
-    paddingVertical: 8,
     marginTop: 8,
-    alignItems: "center",
-  },
+    },
 
-  startButtonText: {
-    color: "#FFFFFF",
+    highPriorityBadge: {
+    backgroundColor: "#FAD6DE",
+    },
+
+    mediumPriorityBadge: {
+    backgroundColor: "#FFF0CC",
+    },
+
+    priorityText: {
     fontSize: 10,
-    fontWeight: "600",
-  },
-
-  taskText: {
-    fontSize: 9,
-    color: "#593E4B",
-    marginBottom: 7,
-  },
-
-  viewAll: {
-    fontSize: 10,
-    color: "#B53166",
-    textAlign: "center",
-    marginTop: 5,
-    fontWeight: "600",
-  },
-
-  sectionTitle: {
-    fontSize: 16,
     fontWeight: "700",
-    color: "#41353A",
-    marginTop: 18,
-    marginBottom: 9,
-  },
+    },
 
-  requestCard: {
-    backgroundColor: "#F3ECEF",
-    borderLeftWidth: 3,
-    borderLeftColor: "#F18BAF",
-    borderRadius: 10,
-    padding: 9,
-    marginBottom: 8,
-  },
+    highPriorityText: {
+    color: "#BC315B",
+    },
 
-  requestText: {
-    fontSize: 11,
-    color: "#493A40",
-  },
-
-  bold: {
-    fontWeight: "700",
-  },
-
-  priority: {
-    fontSize: 9,
-    color: "#C82E59",
-    marginTop: 4,
-    fontWeight: "600",
-  },
+    mediumPriorityText: {
+    color: "#986000",
+    },
 
   familyCard: {
     backgroundColor: "#F4ECEF",
@@ -425,31 +615,64 @@ headerActions: {
     fontWeight: "600",
   },
 
-  familyStatus: {
+    familyAvatarText: {
+    fontSize: 20,
+    },
+
+    familyStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 5,
+    },
+
+    familyStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+    },
+
+    familyStatus: {
     fontSize: 10,
     color: "#74636A",
-    marginTop: 3,
-  },
+    },
 
   arrow: {
     color: "#E45D92",
     fontSize: 26,
   },
 
-  bottomBar: {
-    backgroundColor: "#DB6795",
-    paddingVertical: 13,
-    paddingHorizontal: 25,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+bottomBar: {
+  backgroundColor: "#DB6795",
+  paddingVertical: 12,
+  paddingHorizontal: 16,
+  borderTopLeftRadius: 28,
+  borderTopRightRadius: 28,
+  flexDirection: "row",
+  justifyContent: "space-around",
+  alignItems: "center",
+},
 
-  navItem: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    textAlign: "center",
-  },
+activeNavItem: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#BE4779",
+  borderRadius: 18,
+  paddingVertical: 7,
+},
+
+navButton: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  paddingVertical: 7,
+},
+
+navText: {
+  color: "#FFFFFF",
+  fontSize: 10,
+  fontWeight: "600",
+  marginTop: 4,
+},
 });
