@@ -1,5 +1,6 @@
 
-import React from "react";
+
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +13,7 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Props = {
   onTasksPress: () => void;
@@ -23,13 +25,43 @@ export default function ParentHomeScreen({
   onLogout,
 }: Props) {
     
-  const tasks = [
-    "Project for AppDev",
-    "Client layout",
-    "Research Paper C-1",
-    "Research Paper C-2",
-    "GitHub Account",
-  ];
+  const [tasks, setTasks] = useState<
+  { id: number; title: string; completed: boolean }[]
+>([]);
+
+useEffect(() => {
+  const loadTasks = async () => {
+    try {
+      const savedTasks = await AsyncStorage.getItem(
+        "@quietcue_parent_tasks"
+      );
+
+      if (savedTasks !== null) {
+        setTasks(JSON.parse(savedTasks));
+      }
+    } catch (error) {
+      console.error("Failed to load dashboard tasks:", error);
+    }
+  };
+
+  loadTasks();
+}, []);
+
+const completedCount = tasks.filter(
+  (task) => task.completed
+).length;
+
+const totalTasks = tasks.length;
+
+const progressPercentage =
+  totalTasks > 0
+    ? (completedCount / totalTasks) * 100
+    : 0;
+
+    // Show pending tasks first, limited to 3 on dashboard
+const dashboardTasks = [...tasks]
+  .sort((a, b) => Number(a.completed) - Number(b.completed))
+  .slice(0, 3);
 
   const requests = [
     { name: "Roshelle", message: "school help", priority: "High Priority" },
@@ -162,18 +194,89 @@ export default function ParentHomeScreen({
 
             <View style={styles.tasksCard}>
             <Text style={styles.cardTitle}>Today's Tasks</Text>
+            {/* TASK COMPLETION PROGRESS */}
+            <View style={{ marginTop: 10, marginBottom: 15 }}>
+            <Text style={{ fontSize: 12, color: "#9F4268", marginBottom: 8 }}>
+                {completedCount} of {totalTasks} tasks completed ({Math.round(progressPercentage)}%)
+            </Text>
 
-            {tasks.map((task, index) => (
-                <View key={index} style={styles.taskRow}>
-                <Ionicons
-                    name="checkbox-outline"
-                    size={14}
-                    color="#B53166"
+            <View
+                style={{
+                height: 8,
+                backgroundColor: "#F5DCE6",
+                borderRadius: 10,
+                overflow: "hidden",
+                }}
+            >
+                <View
+                style={{
+                    width: `${progressPercentage}%`,
+                    height: "100%",
+                    backgroundColor: "#B53166",
+                    borderRadius: 10,
+                }}
                 />
+            </View>
+            </View>
 
-                <Text style={styles.taskText}>{task}</Text>
-                </View>
-            ))}
+            {dashboardTasks.length === 0 ? (
+  <View
+    style={{
+      alignItems: "center",
+      paddingVertical: 20,
+    }}
+  >
+    <Ionicons
+      name="checkmark-circle-outline"
+      size={36}
+      color="#B53166"
+    />
+
+    <Text
+      style={{
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#9F4268",
+        marginTop: 10,
+      }}
+    >
+      No tasks yet!
+    </Text>
+
+    <Text
+      style={{
+        fontSize: 12,
+        color: "#9F4268",
+        textAlign: "center",
+        marginTop: 5,
+      }}
+    >
+      Add your first task to get started.
+    </Text>
+  </View>
+) : (
+        dashboardTasks.map((task) => (
+            <View key={task.id} style={styles.taskRow}>
+            <Ionicons
+                name={task.completed ? "checkbox" : "square-outline"}
+                size={14}
+                color={task.completed ? "#22C55E" : "#B53166"}
+            />
+
+            <Text
+                style={[
+                styles.taskText,
+                task.completed && {
+                    textDecorationLine: "line-through",
+                    opacity: 0.6,
+                },
+                ]}
+            >
+                {task.title}
+            </Text>
+            </View>
+        ))
+        )}
 
             <Pressable
             onPress={onTasksPress}

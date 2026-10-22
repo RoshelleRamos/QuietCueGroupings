@@ -87,6 +87,7 @@ const handleDeleteTask = (taskId: number) => {
 const completedCount = tasks.filter(
   (task) => task.completed
 ).length;
+const pendingCount = tasks.length - completedCount;
 
 // LOAD SAVED TASKS
 useEffect(() => {
@@ -130,20 +131,24 @@ useEffect(() => {
 }, [tasks, tasksLoaded]);
   return (
     <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.backButton}>
-          <Ionicons
+            {/* HEADER */}
+        <View style={styles.header}>
+        <Pressable
+            onPress={onBack}
+            hitSlop={12}
+            style={styles.backButton}
+        >
+            <Ionicons
             name="arrow-back"
-            size={24}
+            size={26}
             color="#FFFFFF"
-          />
+            />
         </Pressable>
 
         <Text style={styles.headerTitle}>My Tasks</Text>
 
         <View style={styles.headerSpacer} />
-      </View>
+        </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -157,14 +162,45 @@ useEffect(() => {
             {completedCount} of {tasks.length} tasks completed
           </Text>
 
+          <Text
+            style={{
+                fontSize: 13,
+                fontWeight: "600",
+                color: "#B53166",
+                marginBottom: 8,
+            }}
+            >
+            {tasks.length > 0
+                ? Math.round((completedCount / tasks.length) * 100)
+                : 0}% Complete
+            </Text>
+            
+            <View
+            style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 12,
+            }}
+            >
+            <Text style={{ fontSize: 13, color: "#D45A88" }}>
+                Pending: {pendingCount}
+            </Text>
+
+            <Text style={{ fontSize: 13, color: "#22C55E" }}>
+                Completed: {completedCount}
+            </Text>
+            </View>
+
           <View style={styles.progressBackground}>
             <View
               style={[
                 styles.progressFill,
                 {
-                  width: `${
-                    (completedCount / tasks.length) * 100
-                  }%`,
+                 width: `${
+                tasks.length > 0
+                    ? (completedCount / tasks.length) * 100
+                    : 0
+                }%`,
                 },
               ]}
             />
@@ -175,7 +211,46 @@ useEffect(() => {
         <Text style={styles.sectionTitle}>My Task List</Text>
 
         
-        {tasks.map((task) => (
+        {tasks.length === 0 ? (
+  <View
+    style={{
+      alignItems: "center",
+      paddingVertical: 35,
+      paddingHorizontal: 20,
+    }}
+  >
+    <Ionicons
+      name="clipboard-outline"
+      size={48}
+      color="#D45A88"
+    />
+
+    <Text
+      style={{
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#9F4268",
+        marginTop: 12,
+      }}
+    >
+      No tasks yet!
+    </Text>
+
+    <Text
+      style={{
+        fontSize: 13,
+        color: "#9F4268",
+        textAlign: "center",
+        marginTop: 6,
+      }}
+    >
+      Tap Add New Task to create your first task.
+    </Text>
+  </View>
+) : (
+  tasks.map((task) => (
+
+
         <Pressable
             key={task.id}
             style={styles.taskCard}
@@ -232,7 +307,8 @@ useEffect(() => {
             </Pressable>
           </Pressable>
         
-        ))}
+          ))
+)}
 
         {/* ADD TASK BUTTON */}
         <Pressable
@@ -299,21 +375,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8FB",
   },
 
-  header: {
-    backgroundColor: "#D45A88",
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 22,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+ header: {
+  backgroundColor: "#D45A88",
+  paddingHorizontal: 20,
+  paddingTop: 65,
+  paddingBottom: 22,
+  borderBottomLeftRadius: 25,
+  borderBottomRightRadius: 25,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
 
-  backButton: {
-    padding: 4,
-  },
+ backButton: {
+  width: 48,
+  height: 48,
+  borderRadius: 24,
+  backgroundColor: "#B53166",
+  alignItems: "center",
+  justifyContent: "center",
+},
 
   headerTitle: {
     color: "#FFFFFF",
