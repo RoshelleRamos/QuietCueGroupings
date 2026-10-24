@@ -50,7 +50,7 @@ export default function CreateAccountScreen({
 
   return (
     <ImageBackground
-      source={require("../../assets/PlainpinkBG.png")}
+      source={require("../../assets/DesignBG.png")}
       style={styles.background}
       resizeMode="cover"
     >
