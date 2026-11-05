@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ type Props = {
 };
 
 export default function LoadingScreen({ onFinish }: Props) {
-  const bounce = useRef(new Animated.Value(0)).current;
+  const [bounce] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     const animation = Animated.loop(

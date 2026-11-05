@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import {
 
 type Props = {
   onSignUp: () => void;
-  onLogin: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
 };
 
 export default function LoginScreen({
@@ -25,15 +25,16 @@ export default function LoginScreen({
   onLogin,
 }: Props) {
 
+  const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   // Animation values
-  const panelSlide = useRef(new Animated.Value(350)).current;
-  const panelOpacity = useRef(new Animated.Value(0)).current;
-  const detailsOpacity = useRef(new Animated.Value(0)).current;
-  const detailsSlide = useRef(new Animated.Value(20)).current;
+  const [panelSlide] = useState(() => new Animated.Value(350));
+  const [panelOpacity] = useState(() => new Animated.Value(0));
+  const [detailsOpacity] = useState(() => new Animated.Value(0));
+  const [detailsSlide] = useState(() => new Animated.Value(20));
 
   useEffect(() => {
     Animated.sequence([
@@ -148,7 +149,8 @@ export default function LoginScreen({
 
               <Pressable
                 style={styles.loginButton}
-                onPress={() => {
+                disabled={busy}
+                onPress={async () => {
                   if (!email.trim() || !password.trim()) {
                     Alert.alert(
                       "Missing Information",
@@ -157,15 +159,16 @@ export default function LoginScreen({
                     return;
                   }
 
-                  onLogin();
+                  setBusy(true);
+                  try { await onLogin(email.trim().toLowerCase(), password); } finally { setBusy(false); }
                 }}
               >
-                <Text style={styles.loginText}>Log In</Text>
+                <Text style={styles.loginText}>{busy ? "Logging in…" : "Log In"}</Text>
               </Pressable>
 
               <View style={styles.signupRow}>
                 <Text style={styles.signupText}>
-                  Don't have an account?{" "}
+                  Don&apos;t have an account?{" "}
                 </Text>
 
                 <Pressable onPress={onSignUp}>

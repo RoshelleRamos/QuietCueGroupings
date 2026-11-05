@@ -13,9 +13,11 @@ import {
   Platform,
 } from "react-native";
 
+import type { Registration } from "../lib/api";
+
 type Props = {
   onBack: () => void;
-  onContinue: () => void;
+  onContinue: (details: Registration) => void;
 };
 
 export default function CreateAccountScreen({
@@ -44,8 +46,11 @@ export default function CreateAccountScreen({
       return;
     }
 
-    // Static UI only. No account is created yet.
-    onContinue();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert("Invalid Email", `Please check the email entered: “${email.trim()}”. Example: name@gmail.com`); return;
+    }
+    if (password.length < 8) { Alert.alert("Password Too Short", "Use at least 8 characters."); return; }
+    onContinue({ fullName: fullName.trim(), email: email.trim().toLowerCase(), password });
   };
 
   return (
@@ -86,6 +91,8 @@ export default function CreateAccountScreen({
               placeholder="Enter your email"
               placeholderTextColor="#A58A96"
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}

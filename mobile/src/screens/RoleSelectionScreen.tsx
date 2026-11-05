@@ -14,15 +14,18 @@ type Role = "parent" | "family" | "child";
 type Props = {
   onBack: () => void;
   onContinue: (role: Role) => void;
+  busy?: boolean;
 };
 
 export default function RoleSelectionScreen({
   onBack,
   onContinue,
+  busy = false,
 }: Props) {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   const handleContinue = () => {
+    if (busy) return;
     if (!selectedRole) {
       Alert.alert("QuietCue", "Please select your role.");
       return;
@@ -93,7 +96,7 @@ export default function RoleSelectionScreen({
               !selectedRole && styles.disabledButton,
             ]}
             onPress={handleContinue}
-            disabled={!selectedRole}
+            disabled={!selectedRole || busy}
           >
             <Text
               style={[
@@ -101,12 +104,12 @@ export default function RoleSelectionScreen({
                 !selectedRole && styles.disabledText,
               ]}
             >
-              Continue
+              {busy ? "Creating account…" : "Create Account"}
             </Text>
           </Pressable>
 
           {/* BACK BUTTON */}
-          <Pressable onPress={onBack} style={styles.backButton}>
+          <Pressable disabled={busy} onPress={onBack} style={styles.backButton}>
             <Text style={styles.backText}>Back</Text>
           </Pressable>
         </View>
