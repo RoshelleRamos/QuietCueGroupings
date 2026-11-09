@@ -1,13 +1,18 @@
+import { pbkdf2Async } from '@noble/hashes/pbkdf2';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getRandomBytesAsync } from 'expo-crypto';
 
 import type { FamilyRequest, Profile } from './family';
 import { startOfLocalDay, type FocusSession, type ParentNotification, type ParentSnapshot, type Task } from './parent-model';
 
 export type Role = 'parent' | 'family' | 'child';
-export type Registration = { fullName: string; email: string };
+export type Registration = { fullName: string; email: string; password: string };
 export type User = { id: string; email: string; user_metadata: { full_name: string; role: Role } };
-type Account = { user: User; profile: Profile; familyCode: string };
-type DemoData = {
+type Credentials = { salt: string; verifier: string };
+type Account = { user: User; profile: Profile; familyCode: string; credentials?: Credentials };
+type LocalData = {
   currentId: string | null;
   nextId: number;
   accounts: Account[];
@@ -22,42 +27,39 @@ const storageKey = '@quietcue_demo_v1';
 const listeners = new Set<(user: User | null) => void>();
 let pending = Promise.resolve();
 const now = () => new Date().toISOString();
-const id = (data: DemoData) => String(data.nextId++);
+const id = (data: LocalData) => String(data.nextId++);
 
 function account(accountId: string, email: string, fullName: string, role: Role): Account {
   return {
     user: { id: accountId, email, user_metadata: { full_name: fullName, role } },
     profile: { id: accountId, full_name: fullName, role, focus_status: 'available', available_at: null },
-    familyCode: 'DEMO' + accountId.padStart(8, '0'),
+    familyCode: 'QC' + accountId.padStart(10, '0'),
   };
 }
 
-function initialData(): DemoData {
+function initialData(): LocalData {
   return {
     currentId: null,
     nextId: 3,
-    accounts: [
-      account('1', 'parent@example.com', 'Demo Parent', 'parent'),
-      account('2', 'child@example.com', 'Demo Child', 'child'),
-    ],
+    accounts: [],
     links: {}, requests: [], tasks: [], sessions: [], notifications: [],
   };
 }
 
-async function read(): Promise<DemoData> {
+async function read(): Promise<LocalData> {
   await pending;
   return readStorage();
 }
 
-async function readStorage(): Promise<DemoData> {
+async function readStorage(): Promise<LocalData> {
   const saved = await AsyncStorage.getItem(storageKey);
   return saved ? JSON.parse(saved) : initialData();
 }
 
-function change<T>(update: (data: DemoData) => T): Promise<T> {
+function change<T>(update: (data: LocalData) => T | Promise<T>): Promise<T> {
   const result = pending.then(async () => {
     const data = await readStorage();
-    const value = update(data);
+    const value = await update(data);
     await AsyncStorage.setItem(storageKey, JSON.stringify(data));
     return value;
   });
@@ -65,29 +67,33 @@ function change<T>(update: (data: DemoData) => T): Promise<T> {
   return result;
 }
 
-function currentAccount(data: DemoData) {
-  return data.accounts.find(({ user }) => user.id === data.currentId);
+function currentAccount(data: LocalData) {
+  return data.accounts.find(({ user, credentials }) => user.id === data.currentId && credentials);
 }
 
-function requireAccount(data: DemoData, userId: string, parent: boolean) {
+function requireAccount(data: LocalData, userId: string, parent: boolean) {
   const current = currentAccount(data);
   if (!current || current.user.id !== userId || (current.user.user_metadata.role === 'parent') !== parent) {
-    throw new Error('Switch to the matching demo profile.');
+    throw new Error('Switch to the matching account.');
   }
   return current;
 }
 
-function findTask(data: DemoData, userId: string, taskId: string) {
+function findTask(data: LocalData, userId: string, taskId: string) {
   const task = data.tasks.find(row => row.user_id === userId && row.id === taskId);
   if (!task) throw new Error('This task is no longer available.');
   return task;
 }
 
-function notify(data: DemoData, recipient: string, kind: ParentNotification['kind'], title: string, body: string, requestId: string | null = null) {
+function notify(data: LocalData, recipient: string, kind: ParentNotification['kind'], title: string, body: string, requestId: string | null = null) {
   data.notifications.unshift({ id: id(data), recipient_id: recipient, kind, title, body, request_id: requestId, created_at: now(), read_at: null });
 }
 
-export const demo = {
+async function passwordVerifier(password: string, salt: Uint8Array) {
+  return bytesToHex(await pbkdf2Async(sha256, password, salt, { c: 600_000, dkLen: 32 }));
+}
+
+export const localStore = {
   subscribe(listener: (user: User | null) => void) {
     listeners.add(listener);
     return () => { listeners.delete(listener); };
@@ -95,20 +101,36 @@ export const demo = {
   async currentUser() {
     return currentAccount(await read())?.user ?? null;
   },
-  async signIn(email: string) {
-    const user = await change(data => {
+  async signIn(email: string, password: string) {
+    const user = await change(async data => {
       const existing = data.accounts.find(row => row.user.email === email);
-      if (!existing) throw new Error('Enter a demo email or create a local demo profile.');
+      if (existing && !existing.credentials) {
+        throw new Error('Use Create Account with the same email and role to set a password for your existing profile.');
+      }
+      if (!existing?.credentials || await passwordVerifier(password, hexToBytes(existing.credentials.salt)) !== existing.credentials.verifier) {
+        throw new Error('The email or password is incorrect.');
+      }
       data.currentId = existing.user.id;
       return existing.user;
     });
     listeners.forEach(listener => listener(user));
   },
-  async signUp({ email, fullName }: Registration, role: Role) {
-    const user = await change(data => {
-      if (data.accounts.some(row => row.user.email === email)) throw new Error('This demo profile already exists.');
-      const created = account(id(data), email, fullName, role);
-      data.accounts.push(created);
+  async signUp({ email, fullName, password }: Registration, role: Role) {
+    if (password.length < 8) throw new Error('Use at least 8 characters for your password.');
+    const user = await change(async data => {
+      const existing = data.accounts.find(row => row.user.email === email);
+      if (existing?.credentials) throw new Error('An account with this email already exists on this device.');
+      if (existing && existing.user.user_metadata.role !== role) {
+        throw new Error('Choose the same role as your existing profile.');
+      }
+      const salt = await getRandomBytesAsync(16);
+      const credentials = { salt: bytesToHex(salt), verifier: await passwordVerifier(password, salt) };
+      // Reuse the old profile ID so its tasks, requests and family link survive.
+      const created = existing ?? account(id(data), email, fullName, role);
+      created.credentials = credentials;
+      created.profile.full_name = fullName;
+      created.user.user_metadata.full_name = fullName;
+      if (!existing) data.accounts.push(created);
       data.currentId = created.user.id;
       return created.user;
     });
@@ -146,9 +168,9 @@ export const demo = {
     return change(data => {
       const child = requireAccount(data, userId, false);
       const parent = data.accounts.find(row => row.profile.role === 'parent' && row.familyCode === code.trim().toUpperCase());
-      if (!parent) throw new Error('Enter a family code from a parent profile on this device.');
+      if (!parent) throw new Error('Enter a family code from a parent account on this device.');
       if (data.links[userId] === parent.user.id) return;
-      if (data.links[userId]) throw new Error('This demo profile already has a connected parent.');
+      if (data.links[userId]) throw new Error('This account already has a connected parent.');
       data.links[userId] = parent.user.id;
       notify(data, parent.user.id, 'child_connected', 'Family member connected', `${child.profile.full_name} joined your family.`);
     });
@@ -157,7 +179,7 @@ export const demo = {
     return change(data => {
       const child = requireAccount(data, userId, false);
       const parentId = data.links[userId];
-      if (!parentId) throw new Error('Connect a demo parent first.');
+      if (!parentId) throw new Error('Connect a parent account first.');
       const requestId = id(data);
       data.requests.unshift({
         id: requestId, child_id: userId, parent_id: parentId, category, message, priority,
@@ -165,7 +187,7 @@ export const demo = {
       });
       const urgent = priority === 'emergency';
       notify(data, parentId, urgent ? 'emergency' : 'request',
-        urgent ? 'Urgent demo request' : 'New family request', `${child.profile.full_name}: ${message}`, requestId);
+        urgent ? 'Urgent family request' : 'New family request', `${child.profile.full_name}: ${message}`, requestId);
     });
   },
   answer(userId: string, requestId: string, status: 'acknowledged' | 'done') {
@@ -236,7 +258,7 @@ export const demo = {
   },
 };
 
-function closeFocus(data: DemoData, userId: string, endedAt: string) {
+function closeFocus(data: LocalData, userId: string, endedAt: string) {
   const session = data.sessions.find(row => row.user_id === userId && !row.ended_at);
   if (session) session.ended_at = session.planned_end < endedAt ? session.planned_end : endedAt;
 }

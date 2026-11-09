@@ -8,7 +8,7 @@ import {
   Pressable,
 } from "react-native";
 
-import type { Role } from "../lib/demo";
+import type { Role } from "../lib/local-store";
 import { showAlert } from "../lib/show-alert";
 
 type Props = {

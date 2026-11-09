@@ -2,7 +2,7 @@ export type Profile = { id: string; full_name: string; role: string; focus_statu
 export type FamilyRequest = { id: string; child_id: string; parent_id: string; category: string; message: string; priority: 'normal'|'emergency'; status: 'pending'|'acknowledged'|'done'; created_at: string };
 export const categories = ['School help','Food & drink','Can we talk?','Something else'] as const;
 export function errorMessage(error: unknown) {
- return error instanceof Error ? error.message : 'Something went wrong with the local demo.';
+ return error instanceof Error ? error.message : 'Something went wrong with local storage.';
 }
 export function parentStatus(parent: Profile|null, now = Date.now()) {
  if (!parent) return { label: 'Not connected', detail: 'Ask your parent for a family code.', color: '#837C91', focusing: false };

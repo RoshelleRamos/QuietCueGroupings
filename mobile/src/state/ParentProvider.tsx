@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 
-import { demo, type User } from '../lib/demo';
+import { localStore, type User } from '../lib/local-store';
 import { errorMessage } from '../lib/family';
 import { emptyParent, forAccount, type ParentSnapshot, type Task } from '../lib/parent-model';
 import { showAlert } from '../lib/show-alert';
@@ -36,7 +36,7 @@ export function ParentProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     const account = currentUser.current;
     try {
-      const next = account?.user_metadata.role === 'parent' ? await demo.loadParent(account.id) : emptyParent();
+      const next = account?.user_metadata.role === 'parent' ? await localStore.loadParent(account.id) : emptyParent();
       if (currentUser.current === account) {
         setSnapshot(next);
         setError('');
@@ -57,11 +57,11 @@ export function ParentProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       void refresh();
     };
-    const unsubscribe = demo.subscribe(next => {
+    const unsubscribe = localStore.subscribe(next => {
       changed = true;
       update(next);
     });
-    demo.currentUser().then(next => {
+    localStore.currentUser().then(next => {
       if (active && !changed) update(next);
     }).catch(cause => {
       if (active && !changed) {
@@ -93,16 +93,16 @@ export function ParentProvider({ children }: { children: React.ReactNode }) {
   const value: ParentContext = {
     ...forAccount(snapshot, user?.id ?? null),
     user, loading, error, busy, refresh,
-    saveTask: (title, id) => run(uid => demo.saveTask(uid, title, id)),
-    toggleTask: task => run(uid => demo.toggleTask(uid, task.id)),
-    deleteTask: id => run(uid => demo.deleteTask(uid, id)),
-    startFocus: (minutes, taskId) => run(uid => demo.startFocus(uid, minutes, taskId)),
-    endFocus: (status = 'available') => run(uid => demo.endFocus(uid, status)),
-    answer: (id, status) => run(uid => demo.answer(uid, id, status)),
-    markRead: id => run(uid => demo.markRead(uid, id)),
+    saveTask: (title, id) => run(uid => localStore.saveTask(uid, title, id)),
+    toggleTask: task => run(uid => localStore.toggleTask(uid, task.id)),
+    deleteTask: id => run(uid => localStore.deleteTask(uid, id)),
+    startFocus: (minutes, taskId) => run(uid => localStore.startFocus(uid, minutes, taskId)),
+    endFocus: (status = 'available') => run(uid => localStore.endFocus(uid, status)),
+    answer: (id, status) => run(uid => localStore.answer(uid, id, status)),
+    markRead: id => run(uid => localStore.markRead(uid, id)),
     logout: async () => {
       try {
-        await demo.signOut();
+        await localStore.signOut();
         router.replace('/');
       } catch (cause) {
         showAlert('Could not log out', errorMessage(cause));

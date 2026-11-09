@@ -8,19 +8,21 @@ npm ci
 npm run web
 ```
 
-From the splash screen, open **Demo Login** and enter one of these sample emails:
+For Expo Go, run `npm start -- --go` from `mobile` and scan the QR code
+with an SDK 58 compatible version of Expo Go.
 
-- **Parent** · `parent@example.com`
-- **Child** · `child@example.com`
+From the splash screen, choose **Sign Up** to create an account with a name,
+email, password, and role. Use that email and password to sign back in.
 
-In the Parent profile, open **Tasks** to add, edit, complete, or delete a task.
-Open **Family** to copy the demo family code, then log out from **Profile**.
-Open the Child profile in the same browser, enter the code under **Profile**,
-and send a sample request. Switch back to Parent to see it under **Family**
-and **Notifications**.
+In a Parent account, open **Tasks** to add, edit, complete, or delete a task.
+Open **Family** to copy the family code, then log out from **Profile**.
+Create a Child account with a different email in the same browser or app
+installation. Enter the code under **Profile**, then send a request.
+Switch back to Parent to see it under **Family** and **Notifications**.
 
-Demo profiles and changes are stored in the current browser or app installation.
-Sign-up creates a local demo profile using a sample name and email.
+Accounts and activity stay in the current browser or app installation. To keep
+an existing passwordless profile, sign up with its previous email and role to
+add a password and retain its data.
 
 ## Checks and static build
 

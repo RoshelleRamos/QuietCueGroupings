@@ -2,7 +2,7 @@ import { Redirect } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { demo, type Registration, type Role } from './src/lib/demo';
+import { localStore, type Registration, type Role } from './src/lib/local-store';
 import { errorMessage } from './src/lib/family';
 import { showAlert } from './src/lib/show-alert';
 import SplashScreen from './src/screens/SplashScreen';
@@ -23,11 +23,11 @@ export default function App() {
     submitting.current = true;
     setBusy(true);
     try {
-      await demo.signUp(registration, role);
+      await localStore.signUp(registration, role);
       setRegistration(null);
       setScreen('login');
     } catch (error) {
-      showAlert('Could not create demo profile', errorMessage(error));
+      showAlert('Could not create account', errorMessage(error));
     } finally {
       submitting.current = false;
       setBusy(false);
@@ -39,11 +39,11 @@ export default function App() {
   if (screen === 'splash') return <SplashScreen onContinue={() => setScreen('login')} />;
   if (screen === 'register') return <CreateAccountScreen onBack={() => setScreen('login')} onContinue={details => { setRegistration(details); setScreen('role'); }} />;
   if (screen === 'role') return <RoleSelectionScreen busy={busy} onBack={() => { setRegistration(null); setScreen('register'); }} onContinue={createAccount} />;
-  return <LoginScreen onSignUp={() => setScreen('register')} onLogin={async email => {
+  return <LoginScreen onSignUp={() => setScreen('register')} onLogin={async (email, password) => {
     try {
-      await demo.signIn(email);
+      await localStore.signIn(email, password);
     } catch (error) {
-      showAlert('Could not open demo profile', errorMessage(error));
+      showAlert('Could not log in', errorMessage(error));
     }
   }} />;
 }

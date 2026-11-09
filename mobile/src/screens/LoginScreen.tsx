@@ -18,7 +18,7 @@ import { showAlert } from "../lib/show-alert";
 
 type Props = {
   onSignUp: () => void;
-  onLogin: (email: string) => Promise<void>;
+  onLogin: (email: string, password: string) => Promise<void>;
 };
 
 export default function LoginScreen({
@@ -28,6 +28,8 @@ export default function LoginScreen({
 
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Animation values
   const [panelSlide] = useState(() => new Animated.Value(350));
@@ -110,8 +112,7 @@ export default function LoginScreen({
               />
             </View>
 
-              <Text style={styles.title}>Demo Login</Text>
-              <Text style={styles.signupText}>Use parent@example.com or child@example.com.</Text>
+              <Text style={styles.title}>User Login</Text>
 
               <Text style={styles.label}>Email</Text>
               <TextInput
@@ -125,20 +126,43 @@ export default function LoginScreen({
                 onChangeText={setEmail}
               />
 
+              <Text style={styles.label}>Password</Text>
+
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#A58A96"
+                  secureTextEntry={!showPassword}
+                  autoComplete="current-password"
+                  value={password}
+                  onChangeText={setPassword}
+                />
+
+                <Pressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.showButton}
+                >
+                  <Text style={styles.showText}>
+                    {showPassword ? "Hide" : "Show"}
+                  </Text>
+                </Pressable>
+              </View>
+
               <Pressable
                 style={styles.loginButton}
                 disabled={busy}
                 onPress={async () => {
-                  if (!email.trim()) {
+                  if (!email.trim() || !password.trim()) {
                     showAlert(
                       "Missing Information",
-                      "Please enter a demo email."
+                      "Please enter your email and password."
                     );
                     return;
                   }
 
                   setBusy(true);
-                  try { await onLogin(email.trim().toLowerCase()); } finally { setBusy(false); }
+                  try { await onLogin(email.trim().toLowerCase(), password); } finally { setBusy(false); }
                 }}
               >
                 <Text style={styles.loginText}>{busy ? "Logging in…" : "Log In"}</Text>
@@ -252,9 +276,35 @@ logo: {
     marginBottom: 15,
   },
 
+  passwordContainer: {
+    width: "100%",
+    height: 46,
+    borderWidth: 1,
+    borderColor: "#E98DAE",
+    borderRadius: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF9FB",
+  },
 
+  passwordInput: {
+    flex: 1,
+    height: "100%",
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: "#553241",
+  },
 
+  showButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
 
+  showText: {
+    color: "#BE356C",
+    fontSize: 12,
+    fontWeight: "600",
+  },
 
   loginButton: {
     width: "100%",

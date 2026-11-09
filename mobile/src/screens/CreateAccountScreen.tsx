@@ -12,8 +12,9 @@ import {
   Platform,
 } from "react-native";
 
-import type { Registration } from "../lib/demo";
 import { showAlert } from "../lib/show-alert";
+
+import type { Registration } from "../lib/local-store";
 
 type Props = {
   onBack: () => void;
@@ -26,11 +27,18 @@ export default function CreateAccountScreen({
 }: Props) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleCreateAccount = () => {
-    if (!fullName.trim() || !email.trim()) {
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
       showAlert("Missing Information", "Please complete all fields.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showAlert("Password Mismatch", "Passwords do not match.");
       return;
     }
 
@@ -42,7 +50,8 @@ export default function CreateAccountScreen({
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       showAlert("Invalid Email", `Please check the email entered: “${email.trim()}”. Example: name@gmail.com`); return;
     }
-    onContinue({ fullName: fullName.trim(), email: email.trim().toLowerCase() });
+    if (password.length < 8) { showAlert("Password Too Short", "Use at least 8 characters."); return; }
+    onContinue({ fullName: fullName.trim(), email: email.trim().toLowerCase(), password });
   };
 
   return (
@@ -68,8 +77,8 @@ export default function CreateAccountScreen({
             />
             </View>
 
-            <Text style={styles.title}>Create Demo Profile</Text>
-            <Text style={styles.termsText}>Use a sample name and email. This profile stays on this device.</Text>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.termsText}>Your account is saved on this device.</Text>
 
             <TextInput
               style={styles.input}
@@ -91,6 +100,26 @@ export default function CreateAccountScreen({
               onChangeText={setEmail}
             />
 
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor="#A58A96"
+              secureTextEntry
+              autoComplete="new-password"
+              value={password}
+              onChangeText={setPassword}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm your password"
+              placeholderTextColor="#A58A96"
+              secureTextEntry
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
+
             <Pressable
               style={styles.termsRow}
               onPress={() => setAcceptedTerms(!acceptedTerms)}
@@ -107,7 +136,7 @@ export default function CreateAccountScreen({
               style={styles.createButton}
               onPress={handleCreateAccount}
             >
-              <Text style={styles.createText}>Create Demo Profile</Text>
+              <Text style={styles.createText}>Create Account</Text>
             </Pressable>
 
             <Pressable onPress={onBack} style={styles.backButton}>
