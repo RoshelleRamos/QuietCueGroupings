@@ -17,11 +17,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Props = {
   onTasksPress: () => void;
+  onFocusPress: () => void;
   onLogout: () => void;
 };
 
 export default function ParentHomeScreen({
   onTasksPress,
+  onFocusPress,
   onLogout,
 }: Props) {
     
@@ -176,20 +178,15 @@ const dashboardTasks = [...tasks]
             </View>
 
             <Pressable
-                style={({ pressed }) => [
-                    styles.startButton,
-                    pressed && styles.startButtonPressed,
-                ]}
-                onPress={() =>
-                    Alert.alert(
-                    "Focus Session",
-                    "Pomodoro focus timer will be available soon."
-                    )
-                }
-                >
-                <Ionicons name="play-circle-outline" size={17} color="#FFFFFF" />
-                <Text style={styles.startButtonText}>Start Session</Text>
-                </Pressable>
+              style={({ pressed }) => [
+                styles.startButton,
+                pressed && styles.startButtonPressed,
+              ]}
+              onPress={onFocusPress}
+            >
+              <Ionicons name="play-circle-outline" size={17} color="#FFFFFF" />
+              <Text style={styles.startButtonText}>Start Session</Text>
+            </Pressable>
           </View>
 
             <View style={styles.tasksCard}>
@@ -386,16 +383,14 @@ const dashboardTasks = [...tasks]
     <Text style={styles.navText}>Tasks</Text>
   </Pressable>
 
-  {/* FOCUS */}
-  <Pressable
-    style={styles.navButton}
-    onPress={() =>
-      Alert.alert("Focus", "Focus screen coming soon.")
-    }
-  >
-    <Ionicons name="timer-outline" size={23} color="#FFFFFF" />
-    <Text style={styles.navText}>Focus</Text>
-  </Pressable>
+ {/* FOCUS */}
+<Pressable
+  style={styles.navButton}
+  onPress={onFocusPress}
+>
+  <Ionicons name="timer-outline" size={23} color="#FFFFFF" />
+  <Text style={styles.navText}>Focus</Text>
+</Pressable>
 
   {/* MESSAGES */}
   <Pressable

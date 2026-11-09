@@ -11,6 +11,7 @@ import RoleSelectionScreen from "./src/screens/RoleSelectionScreen";
 import LoadingScreen from "./src/screens/LoadingScreen";
 import ParentHomeScreen from "./src/screens/ParentHomeScreen";
 import ParentTasksScreen from "./src/screens/ParentTasksScreen";
+import ParentFocusScreen from "./src/screens/ParentFocusScreen";
 
 type Screen =
   | "splash"
@@ -19,7 +20,8 @@ type Screen =
   | "role"
   | "loading"
   | "parentHome"
-  | "parentTasks";
+  | "parentTasks"
+  | "parentFocus";
 
 type Role = "parent" | "family" | "child";
 const SESSION_KEY = "@quietcue_dev_session";
@@ -128,8 +130,9 @@ if (screen === "loading") {
           <>
             <StatusBar style="dark" />
             <ParentHomeScreen
-              onTasksPress={() => setScreen("parentTasks")}
-              onLogout={async () => {
+                onTasksPress={() => setScreen("parentTasks")}
+                onFocusPress={() => setScreen("parentFocus")}
+                onLogout={async () => {
                 try {
                   await AsyncStorage.removeItem(SESSION_KEY);
                   setScreen("login");
@@ -154,6 +157,19 @@ if (screen === "loading") {
         </>
       );
     }
+
+   // PARENT FOCUS SCREEN
+if (screen === "parentFocus") {
+  return (
+    <>
+      <StatusBar style="dark" />
+      <ParentFocusScreen
+        onHomePress={() => setScreen("parentHome")}
+        onTasksPress={() => setScreen("parentTasks")}
+      />
+    </>
+  );
+}
 
     // LOGIN SCREEN
     return (
