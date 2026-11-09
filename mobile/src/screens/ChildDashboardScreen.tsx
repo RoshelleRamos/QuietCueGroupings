@@ -6,22 +6,25 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { localStore, type User } from '../lib/local-store';
+import MessageAttachment from './MessageAttachment';
 import { showAlert } from '../lib/show-alert';
-import { categories, errorMessage, parentStatus, type FamilyRequest, type Profile } from '../lib/family';
+import { categories, errorMessage, parentStatus, type FamilyMessage, type FamilyRequest, type Profile } from '../lib/family';
 
 const tabs = [ {id:'home', label:'Home', icon:'home-outline'}, {id:'request',label:'Request',icon:'chatbubble-ellipses-outline'}, {id:'history',label:'History',icon:'time-outline'}, {id:'profile',label:'Profile',icon:'person-outline'} ] as const;
-type Page = typeof tabs[number]['id'];
+type Page = typeof tabs[number]['id'] | 'messages';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
  const Button=({title,onPress,busy=false,icon='arrow-forward',danger=false}:{title:string;onPress:()=>void;busy?:boolean;icon?:IconName;danger?:boolean})=><Pressable accessibilityRole="button" disabled={busy} onPress={onPress} style={({pressed})=>[s.button,danger&&s.danger,pressed&&s.pressed,busy&&s.disabled]}><Text style={s.buttonText}>{busy?'Please wait…':title}</Text><Ionicons name={icon} size={20} color="#fff"/></Pressable>;
  const HistoryCard=({item}:{item:FamilyRequest})=><View style={s.historyCard}><View style={[s.iconBox,{backgroundColor:item.priority==='emergency'?'#FDE6E6':'#F5EAF8'}]}><Ionicons name={item.priority==='emergency'?'alert-circle-outline':'chatbubble-outline'} size={22} color={item.priority==='emergency'?'#B93C49':'#976493'}/></View><View style={s.grow}><View style={s.spread}><Text style={s.cardTitle}>{item.category}</Text><Text style={[s.badge,{color:item.status==='done'?'#26785E':'#925474'}]}>{item.status==='pending'?'Waiting':item.status==='done'?'Done':'Seen'}</Text></View><Text style={s.body}>{item.message}</Text><Text style={s.small}>{new Date(item.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</Text></View></View>;
 
 export default function ChildDashboardScreen({ preview = false }: { preview?: boolean }) {
  const { page, kind } = useLocalSearchParams<{page?: string;kind?:string}>();
- const active: Page = tabs.some(t=>t.id===page) ? page as Page : 'home';
+ const active: Page = page === 'messages' || tabs.some(t=>t.id===page) ? page as Page : 'home';
  const [user,setUser] = useState<User|null>(null);
  const [own,setOwn] = useState<Profile|null>(null);
  const [parent,setParent] = useState<Profile|null>(null);
  const [requests,setRequests] = useState<FamilyRequest[]>([]);
+ const [familyMessages,setFamilyMessages] = useState<FamilyMessage[]>([]);
+ const [reply,setReply] = useState('');
  const [loading,setLoading] = useState(!preview);
  const [refreshing,setRefreshing] = useState(false);
  const [error,setError] = useState('');
@@ -42,7 +45,7 @@ export default function ChildDashboardScreen({ preview = false }: { preview?: bo
    if(!['child','family'].includes(account.user_metadata.role)) {router.replace('/'); return;}
    if(mounted.current) setUser(account);
    const result=await localStore.loadChild(account.id);
-   if(mounted.current) {setOwn(result.own);setParent(result.parent);setRequests(result.requests);setError('');}
+   if(mounted.current) {setOwn(result.own);setParent(result.parent);setRequests(result.requests);setFamilyMessages(result.messages);setError('');}
   } catch(e) {if(mounted.current) setError(errorMessage(e));}
   finally {if(mounted.current) {setLoading(false);setRefreshing(false);}}
  },[preview]);
@@ -73,6 +76,21 @@ export default function ChildDashboardScreen({ preview = false }: { preview?: bo
   } catch(e){showAlert('Could not send',errorMessage(e));}
   finally{lock.current=false;setBusy(false);}
  };
+ const sendReply = async () => {
+  if (!user || !parent || !reply.trim() || lock.current || preview) return;
+  lock.current = true;
+  setBusy(true);
+  try {
+   await localStore.sendMessage(user.id, user.id, reply, 'child');
+   setReply('');
+   await load();
+  } catch (cause) {
+   showAlert('Could not send message', errorMessage(cause));
+  } finally {
+   lock.current = false;
+   setBusy(false);
+  }
+ };
  const emergency=()=>{
   if(!parent) {showAlert('No parent connected','Connect a parent in Profile first. Contact your parent directly if you need help now.');return;}
   showAlert('Need help right now?','This saves an urgent request on this device on this device. For immediate help, contact your parent directly.',[{text:'Go back',style:'cancel'},{text:'Send urgent request',style:'destructive',onPress:()=>void send(true)}]);
@@ -101,7 +119,23 @@ export default function ChildDashboardScreen({ preview = false }: { preview?: bo
     {requests.length?requests.slice(0,2).map(r=><HistoryCard item={r} key={r.id}/>):<View style={s.empty}><Ionicons name="paper-plane-outline" size={30} color="#AB7994"/><Text style={s.cardTitle}>Your first hello starts here</Text><Text style={s.small}>Your requests will appear here after you send one.</Text></View>}
    </>}
    {active==='request'&&<><Text style={s.eyebrow}>A MESSAGE THAT MATTERS</Text><Text style={s.heading}>Ask your parent</Text><Text style={s.subtitle}>Tell them what you need, in your own words.</Text><View style={s.card}><Text style={s.cardTitle}>What is it about?</Text><View style={s.chips}>{categories.map(c=><Pressable key={c} accessibilityRole="radio" accessibilityState={{selected:category===c}} onPress={()=>setCategory(c)} style={[s.chip,category===c&&s.selectedChip]}><Text style={category===c?s.selectedText:s.body}>{c}</Text></Pressable>)}</View><Text style={s.cardTitle}>Your message</Text><TextInput accessibilityLabel="Your request message" multiline maxLength={500} placeholder="Hi! Could you help me with…" placeholderTextColor="#9C8D99" value={message} onChangeText={setMessage} style={s.message}/><Text style={[s.small,{textAlign:'right'}]}>{message.length}/500</Text><Text style={s.body}>{parent?`To: ${parent.full_name}`:'Connect a parent in Profile before sending.'}</Text><Button busy={busy} title="Send request" icon="paper-plane-outline" onPress={()=>void send()}/></View><View style={s.tip}><Ionicons name="leaf-outline" size={21} color="#547C6A"/><Text style={[s.body,s.grow]}>If your parent is focusing, your message can wait in their inbox until they are ready.</Text></View><Button busy={busy} danger title="I need help right now" icon="alert-circle-outline" onPress={emergency}/><Text style={s.small}>Switch to the parent account on this device to see the request.</Text></>}
-   {active==='history'&&<><Text style={s.eyebrow}>EVERY MESSAGE HAS A PLACE</Text><Text style={s.heading}>My requests</Text><Text style={s.subtitle}>See what you’ve shared and what’s been answered.</Text><View style={s.stats}><View style={s.stat}><Text style={s.statValue}>{requests.length}</Text><Text style={s.small}>Recent requests</Text></View><View style={s.stat}><Text style={s.statValue}>{pending}</Text><Text style={s.small}>Waiting</Text></View><View style={s.stat}><Text style={s.statValue}>{completed}</Text><Text style={s.small}>Done</Text></View></View><View style={s.chips}>{['All','Waiting','Seen','Done'].map(f=><Pressable key={f} onPress={()=>setFilter(f)} style={[s.chip,filter===f&&s.selectedChip]}><Text style={filter===f?s.selectedText:s.body}>{f}</Text></Pressable>)}</View>{requests.filter(r=>filter==='All'||r.status===({Waiting:'pending',Seen:'acknowledged',Done:'done'} as Record<string,string>)[filter]).map(r=><HistoryCard item={r} key={r.id}/>)}{!requests.length&&<View style={s.empty}><Ionicons name="chatbubbles-outline" size={38} color="#AB7994"/><Text style={s.cardTitle}>Nothing here just yet</Text><Text style={s.small}>Send your parent a message to get started.</Text><Button busy={busy} title="Make a request" onPress={()=>navigate('request')}/></View>}<Text style={s.small}>Showing up to 100 recent requests. Pull down to refresh.</Text></>}
+   {active==='history'&&<><Text style={s.eyebrow}>EVERY MESSAGE HAS A PLACE</Text><Text style={s.heading}>My requests</Text><Text style={s.subtitle}>See what you’ve shared and what’s been answered.</Text>{parent && <Button title="Messages with my parent" icon="mail-outline" onPress={() => navigate('messages')} />}<View style={s.stats}><View style={s.stat}><Text style={s.statValue}>{requests.length}</Text><Text style={s.small}>Recent requests</Text></View><View style={s.stat}><Text style={s.statValue}>{pending}</Text><Text style={s.small}>Waiting</Text></View><View style={s.stat}><Text style={s.statValue}>{completed}</Text><Text style={s.small}>Done</Text></View></View><View style={s.chips}>{['All','Waiting','Seen','Done'].map(f=><Pressable key={f} onPress={()=>setFilter(f)} style={[s.chip,filter===f&&s.selectedChip]}><Text style={filter===f?s.selectedText:s.body}>{f}</Text></Pressable>)}</View>{requests.filter(r=>filter==='All'||r.status===({Waiting:'pending',Seen:'acknowledged',Done:'done'} as Record<string,string>)[filter]).map(r=><HistoryCard item={r} key={r.id}/>)}{!requests.length&&<View style={s.empty}><Ionicons name="chatbubbles-outline" size={38} color="#AB7994"/><Text style={s.cardTitle}>Nothing here just yet</Text><Text style={s.small}>Send your parent a message to get started.</Text><Button busy={busy} title="Make a request" onPress={()=>navigate('request')}/></View>}<Text style={s.small}>Showing up to 100 recent requests. Pull down to refresh.</Text></>}
+   {active==='messages' && <>
+    <Pressable accessibilityRole="button" onPress={() => navigate('history')}><Text style={s.link}>← Back to history</Text></Pressable>
+    <Text style={s.heading}>Messages</Text>
+    <Text style={s.subtitle}>{parent ? `Conversation with ${parent.full_name}` : 'Connect a parent to start a conversation.'}</Text>
+    {familyMessages.map(item => <View key={item.id} style={s.card}>
+     <Text style={s.cardTitle}>{item.sender === 'parent' ? parent?.full_name : 'You'}</Text>
+     {item.body !== '' && <Text style={s.body}>{item.body}</Text>}
+     {item.attachment && <MessageAttachment attachment={item.attachment} />}
+     <Text style={s.small}>{new Date(item.created_at).toLocaleString()}</Text>
+    </View>)}
+    {parent && <View style={s.card}>
+     <TextInput accessibilityLabel="Message" multiline maxLength={500} placeholder="Message" placeholderTextColor="#9C8D99"
+      value={reply} onChangeText={setReply} style={s.message} />
+     <Button title="Send message" busy={busy} icon="send-outline" onPress={() => void sendReply()} />
+    </View>}
+   </>}
    {active==='profile'&&<><Text style={s.eyebrow}>YOUR OWN LITTLE CORNER</Text><Text style={s.heading}>My profile</Text><View style={s.card}><View style={s.profileAvatar}><Text style={s.avatarText}>{displayName.slice(0,1).toUpperCase()}</Text></View><Text style={s.sectionTitle}>{own?.full_name||user?.user_metadata.full_name||'QuietCue child'}</Text><Text style={s.body}>{user?.email}</Text><Text style={s.badge}>Child / Family account</Text></View><View style={s.card}><Text style={s.sectionTitle}>My family</Text>{parent?<><Text style={s.body}>Connected to {parent.full_name}</Text><View style={s.row}><View style={[s.dot,{backgroundColor:status.color}]}/><Text style={s.body}>{status.label}</Text></View></>:<><Text style={s.body}>Ask your parent to open their Family inbox and share their 12-character family code.</Text><TextInput accessibilityLabel="Family code" value={code} onChangeText={setCode} autoCapitalize="characters" autoCorrect={false} maxLength={12} placeholder="ENTER FAMILY CODE" placeholderTextColor="#9C8D99" style={s.codeInput}/><Button busy={busy} title="Connect my parent" icon="people-outline" onPress={()=>void join()}/></>}</View><View style={s.tip}><Ionicons name="lock-closed-outline" color="#547C6A" size={22}/><Text style={[s.body,s.grow]}>Requests are saved on this device.</Text></View><Pressable style={s.logout} onPress={logout}><Ionicons name="log-out-outline" size={22} color="#A23D69"/><Text style={s.link}>Log out</Text></Pressable></>}
    <Text style={s.footer}>a little quiet. a closer family.</Text>
   </ScrollView>

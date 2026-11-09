@@ -1,5 +1,15 @@
 export type Profile = { id: string; full_name: string; role: string; focus_status: 'available'|'focusing'|'break'; available_at: string|null };
 export type FamilyRequest = { id: string; child_id: string; parent_id: string; category: string; message: string; priority: 'normal'|'emergency'; status: 'pending'|'acknowledged'|'done'; created_at: string };
+export type FamilyAttachment = { id: string; name: string; mime: string };
+export type FamilyMessage = {
+ id: string;
+ parent_id: string;
+ child_id: string;
+ sender: 'parent' | 'child';
+ body: string;
+ attachment?: FamilyAttachment;
+ created_at: string;
+};
 export const categories = ['School help','Food & drink','Can we talk?','Something else'] as const;
 export function errorMessage(error: unknown) {
  return error instanceof Error ? error.message : 'Something went wrong with local storage.';

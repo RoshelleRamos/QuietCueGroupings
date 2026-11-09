@@ -1,80 +1,709 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator, Image, ImageBackground, KeyboardAvoidingView, Modal, Platform,
+  Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import Svg, { Circle } from 'react-native-svg';
+
+import { errorMessage, parentStatus, type FamilyRequest, type Profile } from '../lib/family';
+import {
+  activeSession, clockTime, currentPause, emptyParent, focusSeconds, localDate,
+  remainingSeconds, startOfLocalDay, type FocusSession, type ParentSnapshot, type Task,
+} from '../lib/parent-model';
+import { pickAttachment, type AttachmentDraft } from '../lib/message-attachments';
+import MessageAttachment from './MessageAttachment';
 import { showAlert } from '../lib/show-alert';
 import { useParent } from '../state/ParentProvider';
-import { activeSession, emptyParent, focusSeconds, startOfLocalDay, remainingTime, type Task, type ParentNotification } from '../lib/parent-model';
-import { parentStatus, type FamilyRequest, type Profile } from '../lib/family';
-type Icon=React.ComponentProps<typeof Ionicons>['name'];
-const nav=[{id:'home',label:'Home',icon:'home-outline'},{id:'tasks',label:'Tasks',icon:'checkbox-outline'},{id:'focus',label:'Focus',icon:'timer-outline'},{id:'family',label:'Family',icon:'people-outline'},{id:'profile',label:'Profile',icon:'person-outline'}] as const;
-const pages=['home','tasks','focus','family','profile','notifications','reports'];
-function go(page:string){router.replace({pathname:'/parent/[page]',params:{page}});}
-function Action({label,onPress,icon='arrow-forward',muted=false,danger=false,disabled=false}:{label:string;onPress:()=>void;icon?:Icon;muted?:boolean;danger?:boolean;disabled?:boolean}){
- return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={({pressed})=>[s.action,muted&&s.actionMuted,danger&&s.actionDanger,(pressed||disabled)&&s.dim]}><Text style={[s.actionText,muted&&s.actionMutedText]}>{label}</Text><Ionicons name={icon} size={19} color={muted?'#A03D68':'#FFF'}/></Pressable>;
-}
-function Empty({title,body,icon='leaf-outline'}:{title:string;body:string;icon?:Icon}){return <View style={s.empty}><Ionicons name={icon} size={30} color="#B07998"/><Text style={s.cardTitle}>{title}</Text><Text style={s.small}>{body}</Text></View>;}
-function Stat({value,label,onPress}:{value:string;label:string;onPress:()=>void}){return <Pressable accessibilityRole="button" onPress={onPress} style={s.stat}><Text style={s.statValue}>{value}</Text><Text style={s.small}>{label}</Text></Pressable>;}
-function TaskRow({task,busy,onToggle,onEdit,onDelete}:{task:Task;busy:boolean;onToggle:()=>void;onEdit:()=>void;onDelete:()=>void}){
- return <View style={s.taskRow}><Pressable accessibilityRole="checkbox" accessibilityState={{checked:task.completed,disabled:busy}} disabled={busy} onPress={onToggle} style={s.taskToggle}><Ionicons name={task.completed?'checkmark-circle':'ellipse-outline'} size={26} color={task.completed?'#2B8068':'#B36289'}/><Text style={[s.cardTitle,s.grow,task.completed&&s.strike]}>{task.title}</Text></Pressable><Pressable accessibilityLabel={`Edit ${task.title}`} disabled={busy} onPress={onEdit} style={s.iconButton}><Ionicons name="create-outline" size={20} color="#9C6382"/></Pressable><Pressable accessibilityLabel={`Delete ${task.title}`} disabled={busy} onPress={onDelete} style={s.iconButton}><Ionicons name="trash-outline" size={19} color="#B84C58"/></Pressable></View>;
-}
-function RequestCard({request,name,busy,onAnswer}:{request:FamilyRequest;name:string;busy:boolean;onAnswer:(id:string,status:'acknowledged'|'done')=>void}){
- const urgent=request.priority==='emergency';
- return <View style={[s.card,urgent&&s.urgentCard]}><View style={s.between}><View style={[s.row,s.grow]}><View style={[s.avatarSmall,urgent&&s.urgentIcon]}><Ionicons name={urgent?'alert-circle-outline':'chatbubble-outline'} size={21} color={urgent?'#B7374C':'#9E567A'}/></View><View style={s.grow}><Text style={s.cardTitle}>{name}</Text><Text style={s.small}>{urgent?'Emergency':request.category}</Text></View></View><Text style={[s.pill,urgent&&s.urgentText]}>{request.status==='pending'?'Waiting':request.status==='acknowledged'?'Seen':'Done'}</Text></View><Text style={s.body}>{request.message}</Text><Text style={s.small}>{new Date(request.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</Text>{request.status!=='done'&&<View style={s.actions}>{request.status==='pending'&&<View style={s.grow}><Action muted disabled={busy} label="Mark as seen" icon="eye-outline" onPress={()=>onAnswer(request.id,'acknowledged')}/></View>}<View style={s.grow}><Action disabled={busy} label="Mark as done" icon="checkmark-outline" onPress={()=>onAnswer(request.id,'done')}/></View></View>}</View>;
-}
-function NoteCard({note,busy,onRead,onOpen}:{note:ParentNotification;busy:boolean;onRead:()=>void;onOpen:()=>void}){return <View style={[s.card,!note.read_at&&s.unreadCard,note.kind==='emergency'&&s.urgentCard]}><View style={s.between}><Ionicons name={note.kind==='emergency'?'alert-circle-outline':note.kind==='child_connected'?'people-outline':'notifications-outline'} size={25} color={note.kind==='emergency'?'#B7374C':'#A24A74'}/><Text style={s.small}>{note.read_at?'Read':'New'}</Text></View><Text style={s.cardTitle}>{note.title}</Text><Text style={s.body}>{note.body}</Text><Text style={s.small}>{new Date(note.created_at).toLocaleString()}</Text><View style={s.actions}>{!note.read_at&&<Pressable disabled={busy} onPress={onRead} style={s.textButton}><Text style={s.link}>Mark as read</Text></Pressable>}<Pressable onPress={onOpen} style={s.textButton}><Text style={s.link}>{note.kind==='child_connected'?'View my family':'Open request'} →</Text></Pressable></View></View>;}
 
-export default function ParentDashboardScreen({preview=false}:{preview?:boolean}){
- const parent=useParent();
- return <ParentAccountScreen key={preview?'preview':parent.user?.id||'signed-out'} preview={preview}/>;
+type Icon = React.ComponentProps<typeof Ionicons>['name'];
+const tabs = [
+  { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'tasks', label: 'Tasks', icon: 'clipboard-outline' },
+  { id: 'focus', label: 'Focus', icon: 'timer-outline' },
+  { id: 'messages', label: 'Inbox', icon: 'mail-outline' },
+] as const;
+const pages = ['home', 'tasks', 'focus', 'messages', 'conversation', 'compose', 'family', 'notifications', 'reports', 'profile'];
+const pink = '#A72559';
+const rose = '#C04774';
+const dark = '#402C35';
+const muted = '#745B67';
+
+function go(page: string, params: Record<string, string> = {}) {
+  router.replace({ pathname: '/parent/[page]', params: { page, ...params } });
 }
-function ParentAccountScreen({preview=false}:{preview?:boolean}){
- const {page}=useLocalSearchParams<{page?:string}>();const active=pages.includes(page||'')?page!:'home';
- const parent=useParent();const data=preview?emptyParent():parent;
- const [now,setNow]=useState(()=>Date.now());const [editor,setEditor]=useState(false);const [editing,setEditing]=useState<Task|null>(null);const [title,setTitle]=useState('');
- const [duration,setDuration]=useState(25);const [taskId,setTaskId]=useState<string|null>(null);const [filter,setFilter]=useState('Waiting');
- const [member,setMember]=useState<Profile|null>(null);const [memberFilter,setMemberFilter]=useState<string|null>(null);
- useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
- useEffect(()=>{if(!preview&&!parent.loading&&(!parent.user||parent.user.user_metadata.role!=='parent'))router.replace('/');},[parent.user,parent.loading,preview]);
- const enabled=!preview&&!parent.loading&&!parent.error&&!!parent.profile;
- const busy=parent.busy||!enabled;
- const unread=data.notifications.filter(n=>!n.read_at).length;
- const pending=data.requests.filter(r=>r.status!=='done');
- const ordered=[...data.requests].sort((a,b)=>Number(b.priority==='emergency'&&b.status!=='done')-Number(a.priority==='emergency'&&a.status!=='done'));
- const done=data.tasks.filter(t=>t.completed).length;
- const session=activeSession(data.sessions,now);
- const status=parentStatus(data.profile,now);
- const seconds=focusSeconds(data.sessions,now,startOfLocalDay(now));
- const doneToday=data.tasks.filter(t=>t.completed_at&&Date.parse(t.completed_at)>=startOfLocalDay(now)).length;
- const name=data.profile?.full_name||(!preview?parent.user?.user_metadata.full_name:null)||'Parent';
- const childName=(id:string)=>data.children.find(c=>c.id===id)?.full_name||'Family member';
- const editTask=(task:Task|null)=>{setEditing(task);setTitle(task?.title||'');setEditor(true);};
- const deleteTask=(task:Task)=>showAlert('Delete task?',task.title,[{text:'Keep task',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void parent.deleteTask(task.id)}]);
- const shareCode=async()=>{if(!data.code)return;try{await Share.share({message:`Join my QuietCue family. In your child account, open Profile → My family and enter: ${data.code}`});}catch{showAlert('Could not share','You can select and copy the family code instead.');}};
- const logout=()=>showAlert('Log out?','Your data stays saved in your own account.',[{text:'Cancel',style:'cancel'},{text:'Log out',onPress:()=>void parent.logout()}]);
- const answer=(id:string,state:'acknowledged'|'done')=>void parent.answer(id,state);
- const focusCard=<View style={s.focusCard}><View style={s.between}><Text style={s.eyebrow}>{session?'YOUR QUIET TIME':'MAKE A LITTLE SPACE'}</Text><Ionicons name="timer-outline" size={25} color="#A04B76"/></View><Text style={s.timer}>{session?remainingTime(session,now):`${duration}:00`}</Text><Text style={s.body}>{session?'Your family can see when you’ll be available.':'A little focus now. More time together later.'}</Text>{session?<Action label="End focus session" icon="stop-outline" disabled={busy} onPress={()=>void parent.endFocus()}/>:<Action label="Start a focus session" icon="play-outline" disabled={busy} onPress={()=>active==='focus'?void parent.startFocus(duration,taskId):go('focus')}/>}</View>;
- return <SafeAreaView edges={['top','bottom']} style={s.safe}><StatusBar style="dark"/><KeyboardAvoidingView style={s.flex} behavior={Platform.OS==='ios'?'padding':undefined}>
-  <View style={s.header}><Pressable onPress={()=>go('home')} accessibilityLabel="QuietCue home"><Text style={s.brand}>QuietCue<Text style={s.brandDot}>.</Text></Text></Pressable><View style={s.row}><Pressable onPress={()=>go('notifications')} accessibilityLabel={`Notifications, ${unread} unread`} style={s.bell}><Ionicons name="notifications-outline" color="#9D4C75" size={25}/>{unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}</Pressable><Pressable onPress={()=>go('profile')} accessibilityLabel="My profile" style={s.avatarSmall}><Text style={s.initial}>{name.slice(0,1).toUpperCase()}</Text></Pressable></View></View>
-  <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={!preview&&parent.loading} tintColor="#AC4D78" onRefresh={()=>void parent.refresh()}/> }>
-   {!preview&&parent.error&&<View style={s.errorCard}><Text style={s.cardTitle}>Your data could not be loaded</Text><Text style={s.body}>{parent.error}</Text><Action muted label="Retry" icon="refresh-outline" onPress={()=>void parent.refresh()}/></View>}
-   {!preview&&parent.loading&&<ActivityIndicator color="#AC4D78"/>}
-   {active==='home'&&<><Text style={s.eyebrow}>YOUR DAY, AT YOUR OWN PACE</Text><Text style={s.heading}>Hello, {name.split(' ')[0]} ☀️</Text><Text style={s.subtitle}>A little focus. A little family. All in one place.</Text><View style={s.statusCard}><View style={s.grow}><Text style={s.small}>MY AVAILABILITY</Text><Text style={[s.statusTitle,{color:status.color}]}>{data.profile?status.label:'Welcome to QuietCue'}</Text><Text style={s.small}>{data.profile?status.detail:'Your own tasks and family will appear here.'}</Text></View><Pressable onPress={()=>go('focus')} style={s.iconButton} accessibilityLabel="Manage availability"><Ionicons name="options-outline" size={25} color="#9F5378"/></Pressable></View><View style={s.stats}><Stat value={`${done}/${data.tasks.length}`} label="Tasks done" onPress={()=>go('tasks')}/><Stat value={`${Math.floor(seconds/60)}m`} label="Focus today" onPress={()=>go('reports')}/><Stat value={`${data.children.length}`} label="My family" onPress={()=>go('family')}/></View>{focusCard}<View style={s.between}><Text style={s.section}>Family requests</Text><Pressable onPress={()=>go('family')}><Text style={s.link}>View all →</Text></Pressable></View>{pending.length?ordered.filter(r=>r.status!=='done').slice(0,3).map(r=><RequestCard key={r.id} request={r} name={childName(r.child_id)} busy={busy} onAnswer={answer}/>):<Empty title="A little quiet in your inbox" body="Requests from your connected children will appear here." icon="chatbubbles-outline"/>}<View style={s.between}><Text style={s.section}>My family</Text><Pressable onPress={()=>go('family')}><Text style={s.link}>Family code →</Text></Pressable></View>{data.children.length?data.children.map(c=><Pressable accessibilityRole="button" key={c.id} onPress={()=>setMember(c)} style={s.member}><View style={s.avatarSmall}><Ionicons name="person-outline" color="#A24A74" size={22}/></View><View style={s.grow}><Text style={s.cardTitle}>{c.full_name}</Text><Text style={s.small}>{c.role==='child'?'Child':'Family member'} · Connected to you</Text></View><Ionicons name="chevron-forward" size={20} color="#AA7895"/></Pressable>):<Empty title="Your family starts with a code" body="Open Family and share your unique family code with your child." icon="people-outline"/>}</>}
-   {active==='tasks'&&<><Text style={s.eyebrow}>ONE SMALL STEP AT A TIME</Text><Text style={s.heading}>My tasks</Text><Text style={s.subtitle}>Your list belongs to your account.</Text><View style={s.card}><Text style={s.cardTitle}>{done} of {data.tasks.length} completed</Text><View style={s.progress}><View style={[s.progressFill,{width:`${data.tasks.length?done/data.tasks.length*100:0}%`}]}/></View></View><Action label="Add a task" icon="add-outline" disabled={busy} onPress={()=>editTask(null)}/>{data.tasks.length?data.tasks.map(t=><TaskRow key={t.id} task={t} busy={busy} onToggle={()=>void parent.toggleTask(t)} onEdit={()=>editTask(t)} onDelete={()=>deleteTask(t)}/>):<Empty title="A fresh list for a fresh start" body="Add your first task. Other parents’ tasks never appear here." icon="checkbox-outline"/>}</>}
-   {active==='focus'&&<><Text style={s.eyebrow}>QUIET TIME, SHARED WITH CARE</Text><Text style={s.heading}>My focus</Text><Text style={s.subtitle}>Your children can see when you’re ready to talk.</Text>{focusCard}{!session&&<View style={s.card}><Text style={s.cardTitle}>Choose your focus time</Text><View style={s.chips}>{[15,25,50].map(m=><Pressable key={m} onPress={()=>setDuration(m)} style={[s.chip,duration===m&&s.selectedChip]}><Text style={duration===m?s.selectedText:s.body}>{m} min</Text></Pressable>)}</View><Text style={s.cardTitle}>Focus on a task (optional)</Text><View style={s.chips}><Pressable onPress={()=>setTaskId(null)} style={[s.chip,!taskId&&s.selectedChip]}><Text style={!taskId?s.selectedText:s.body}>Just focus</Text></Pressable>{data.tasks.filter(t=>!t.completed).map(t=><Pressable key={t.id} onPress={()=>setTaskId(t.id)} style={[s.chip,taskId===t.id&&s.selectedChip]}><Text style={taskId===t.id?s.selectedText:s.body}>{t.title}</Text></Pressable>)}</View></View>}<View style={s.card}><Text style={s.cardTitle}>Set my availability</Text><Text style={s.body}>Current: {status.label}</Text><View style={s.actions}><View style={s.grow}><Action muted label="Available" icon="checkmark-circle-outline" disabled={busy} onPress={()=>void parent.endFocus('available')}/></View><View style={s.grow}><Action muted label="On a break" icon="cafe-outline" disabled={busy} onPress={()=>void parent.endFocus('break')}/></View></View></View><Action muted label="View today’s report" icon="bar-chart-outline" onPress={()=>go('reports')}/></>}
-   {active==='family'&&<><Text style={s.eyebrow}>A CLOSER LITTLE CIRCLE</Text><Text style={s.heading}>My family</Text><View style={s.familyCode}><Text style={s.cardTitle}>Your unique family code</Text><Text selectable style={s.code}>{data.code||'— — —'}</Text><Text style={s.body}>Your child enters this in Profile → My family. You’ll get a notification when they connect.</Text><Action label="Share family code" icon="share-social-outline" disabled={!data.code} onPress={()=>void shareCode()}/></View><Text style={s.section}>Connected children · {data.children.length}</Text>{data.children.length?data.children.map(c=><View key={c.id} style={s.member}><View style={s.avatarSmall}><Ionicons name="person-outline" size={22} color="#A24A74"/></View><View style={s.grow}><Text style={s.cardTitle}>{c.full_name}</Text><Text style={s.small}>{c.role==='child'?'Child':'Family member'} · Your family</Text></View><Pressable accessibilityLabel={`Show requests from ${c.full_name}`} onPress={()=>{setMemberFilter(c.id);setFilter('All');}} style={s.textButton}><Text style={s.link}>Requests</Text></Pressable></View>):<Empty title="No children connected yet" body="Share your code above to connect your first child." icon="people-outline"/>}<View style={s.between}><Text style={s.section}>Request inbox</Text>{memberFilter&&<Pressable onPress={()=>setMemberFilter(null)}><Text style={s.link}>Show everyone</Text></Pressable>}</View>{memberFilter&&<Text style={s.body}>From: {childName(memberFilter)}</Text>}<View style={s.chips}>{['Waiting','Seen','Done','All'].map(f=><Pressable key={f} onPress={()=>setFilter(f)} style={[s.chip,filter===f&&s.selectedChip]}><Text style={filter===f?s.selectedText:s.body}>{f}</Text></Pressable>)}</View>{ordered.filter(r=>(!memberFilter||r.child_id===memberFilter)&&(filter==='All'||r.status===({Waiting:'pending',Seen:'acknowledged',Done:'done'} as Record<string,string>)[filter])).map(r=><RequestCard key={r.id} request={r} name={childName(r.child_id)} busy={busy} onAnswer={answer}/>)}{!ordered.some(r=>(!memberFilter||r.child_id===memberFilter)&&(filter==='All'||r.status===({Waiting:'pending',Seen:'acknowledged',Done:'done'} as Record<string,string>)[filter]))&&<Empty title="Nothing in this view" body="New requests will appear here when your child sends one."/>}</>}
-   {active==='notifications'&&<><Text style={s.eyebrow}>THE MOMENTS THAT MATTER</Text><Text style={s.heading}>Notifications</Text><Text style={s.subtitle}>{unread} unread family updates</Text><View style={s.card}><Text style={s.cardTitle}>Family connection & emergency alerts</Text><Text style={s.body}>Family activity from this device appears here.</Text></View>{unread>0&&<Action muted disabled={busy} label="Mark all as read" icon="checkmark-done-outline" onPress={()=>void parent.markRead()}/>}{data.notifications.map(n=><NoteCard key={n.id} note={n} busy={busy} onRead={()=>void parent.markRead(n.id)} onOpen={()=>{void parent.markRead(n.id);setMemberFilter(null);setFilter('All');go('family');}}/>)}{!data.notifications.length&&<Empty title="You’re all caught up" body="When a child connects or sends a request, you’ll see it here." icon="notifications-outline"/>}</>}
-   {active==='reports'&&<><Text style={s.eyebrow}>YOUR EFFORT, MADE VISIBLE</Text><Text style={s.heading}>Today’s report</Text><View style={s.stats}><Stat value={`${Math.floor(seconds/60)}m`} label="Focus time" onPress={()=>go('focus')}/><Stat value={`${doneToday}`} label="Tasks done" onPress={()=>go('tasks')}/><Stat value={`${data.sessions.length}`} label="Sessions" onPress={()=>go('focus')}/></View><Text style={s.section}>Today’s focus sessions</Text>{data.sessions.length?data.sessions.map(f=><View key={f.id} style={s.card}><Text style={s.cardTitle}>{data.tasks.find(t=>t.id===f.task_id)?.title||'Quiet focus'}</Text><Text style={s.body}>{new Date(f.started_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})} · {Math.floor(focusSeconds([f],now,startOfLocalDay(now))/60)} min</Text><Text style={s.small}>{activeSession([f],now)?'In progress':'Finished'}</Text></View>):<Empty title="Your next session starts the story" body="Start a focus session to see your own progress here." icon="bar-chart-outline"/>}</>}
-   {active==='profile'&&<><Text style={s.eyebrow}>YOUR OWN SPACE</Text><Text style={s.heading}>My profile</Text><View style={s.card}><View style={s.profileAvatar}><Text style={s.profileInitial}>{name.slice(0,1).toUpperCase()}</Text></View><Text style={s.section}>{name}</Text><Text style={s.body}>{!preview?parent.user?.email:'Parent account'}</Text><Text style={s.pill}>Parent</Text></View><Action muted label="My family & family code" icon="people-outline" onPress={()=>go('family')}/><Action muted label="Notifications" icon="notifications-outline" onPress={()=>go('notifications')}/><Action muted label="Today’s report" icon="bar-chart-outline" onPress={()=>go('reports')}/><View style={s.tip}><Ionicons name="lock-closed-outline" color="#4A806B" size={22}/><Text style={[s.body,s.grow]}>Tasks, focus sessions and requests for this account are saved on this device.</Text></View><Action danger label="Log out" icon="log-out-outline" onPress={logout}/></>}
-   <Text style={s.footer}>a little quiet. a closer family.</Text>
-  </ScrollView>
-  <View style={s.nav}>{nav.map(t=><Pressable accessibilityRole="tab" accessibilityState={{selected:active===t.id}} key={t.id} onPress={()=>go(t.id)} style={s.navItem}><View style={[s.navIcon,active===t.id&&s.navActive]}><Ionicons name={t.icon} size={22} color={active===t.id?'#A33D68':'#9F8A9B'}/></View><Text style={[s.navText,active===t.id&&s.link]}>{t.label}</Text></Pressable>)}</View>
-  <Modal transparent visible={editor} animationType="fade" onRequestClose={()=>{if(!parent.busy)setEditor(false);}}><KeyboardAvoidingView style={s.overlay} behavior={Platform.OS==='ios'?'padding':undefined}><View style={s.modal}><Text style={s.section}>{editing?'Edit task':'A new little step'}</Text><TextInput accessibilityLabel="Task name" autoFocus value={title} onChangeText={setTitle} maxLength={120} placeholder="What would you like to do?" placeholderTextColor="#A58A9D" style={s.input}/><Text style={s.small}>{title.length}/120</Text><Action disabled={parent.busy} label={parent.busy?'Saving…':'Save task'} icon="checkmark-outline" onPress={async()=>{if(await parent.saveTask(title,editing?.id))setEditor(false);}}/><Action muted disabled={parent.busy} label="Cancel" icon="close-outline" onPress={()=>setEditor(false)}/></View></KeyboardAvoidingView></Modal>
-  <Modal transparent visible={!!member} animationType="fade" onRequestClose={()=>setMember(null)}><View style={s.overlay}><View style={s.modal}><Text style={s.section}>{member?.full_name}</Text><Text style={s.body}>{member?.role==='child'?'Child':'Family member'} connected to your family.</Text><Action label="View their requests" icon="chatbubbles-outline" onPress={()=>{setMemberFilter(member?.id||null);setFilter('All');setMember(null);go('family');}}/><Action muted label="Close" icon="close-outline" onPress={()=>setMember(null)}/></View></View></Modal>
- </KeyboardAvoidingView></SafeAreaView>;
+
+function Button({ label, onPress, icon, subtle, disabled }: {
+  label: string; onPress: () => void; icon?: Icon; subtle?: boolean; disabled?: boolean;
+}) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress}
+    style={({ pressed }) => [s.button, subtle && s.subtleButton, (pressed || disabled) && s.dim]}>
+    {icon && <Ionicons name={icon} size={17} color={subtle ? pink : '#FFF'} />}
+    <Text style={[s.buttonText, subtle && s.subtleText]}>{label}</Text>
+  </Pressable>;
 }
-const s=StyleSheet.create({
- safe:{flex:1,backgroundColor:'#FFFAFC'},flex:{flex:1},grow:{flex:1},row:{flexDirection:'row',alignItems:'center',gap:12},between:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10},header:{paddingHorizontal:22,paddingVertical:14,borderBottomWidth:1,borderBottomColor:'#F0E5EC',flexDirection:'row',justifyContent:'space-between',alignItems:'center'},brand:{fontSize:26,fontWeight:'800',letterSpacing:-1,color:'#48344A'},brandDot:{color:'#B75382'},bell:{padding:9,position:'relative'},badge:{position:'absolute',right:1,top:0,minWidth:18,height:18,borderRadius:10,backgroundColor:'#BB4057',justifyContent:'center',alignItems:'center',paddingHorizontal:3},badgeText:{fontSize:9,fontWeight:'700',color:'#FFF'},avatarSmall:{width:40,height:40,borderRadius:14,backgroundColor:'#F4E4ED',alignItems:'center',justifyContent:'center'},initial:{fontSize:19,fontWeight:'700',color:'#A04B76'},content:{padding:22,gap:16,maxWidth:650,width:'100%',alignSelf:'center',paddingBottom:28},eyebrow:{fontSize:9,fontWeight:'700',letterSpacing:1.6,color:'#A57991',marginTop:7},heading:{fontSize:31,fontWeight:'800',letterSpacing:-1,color:'#48344A',marginTop:-3},subtitle:{fontSize:13,lineHeight:21,color:'#8D778B',marginTop:-8},section:{fontSize:18,fontWeight:'700',color:'#503950'},cardTitle:{fontSize:14,fontWeight:'700',color:'#503950'},body:{fontSize:13,lineHeight:21,color:'#796276'},small:{fontSize:11,lineHeight:18,color:'#8E7A8B'},link:{fontSize:12,fontWeight:'700',color:'#A23D69'},statusCard:{backgroundColor:'#ECF3EC',padding:18,borderRadius:20,flexDirection:'row',gap:12,alignItems:'center'},statusTitle:{fontSize:20,fontWeight:'700',marginVertical:6},stats:{flexDirection:'row',backgroundColor:'#F7E9F1',borderRadius:20,paddingVertical:18},stat:{flex:1,alignItems:'center',gap:6},statValue:{fontSize:24,fontWeight:'800',color:'#A14D75'},focusCard:{padding:22,borderRadius:24,backgroundColor:'#F2E4F2',gap:16,borderWidth:1,borderColor:'#EAD9E8'},timer:{fontSize:49,fontWeight:'800',letterSpacing:-2,color:'#9E4C78',fontVariant:['tabular-nums']},action:{padding:14,borderRadius:15,minHeight:49,backgroundColor:'#AA4B77',flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:8},actionText:{fontSize:12,fontWeight:'700',color:'#FFF',flexShrink:1},actionMuted:{backgroundColor:'#F6E9F0',borderWidth:1,borderColor:'#ECD8E4'},actionMutedText:{color:'#A03D68'},actionDanger:{backgroundColor:'#B84C58'},dim:{opacity:.55},actions:{flexDirection:'row',gap:10,alignItems:'center'},card:{padding:18,borderRadius:20,borderWidth:1,borderColor:'#EEE0E9',backgroundColor:'#FFF',gap:12},urgentCard:{borderColor:'#E3A1A9',backgroundColor:'#FFF3F4'},urgentIcon:{backgroundColor:'#F8DDE2'},urgentText:{color:'#B7374C'},unreadCard:{backgroundColor:'#FCF1F8',borderColor:'#DCB8D0'},pill:{fontSize:10,fontWeight:'700',color:'#A14D75',backgroundColor:'#F5E5EE',paddingHorizontal:9,paddingVertical:5,borderRadius:9,overflow:'hidden',alignSelf:'flex-start'},empty:{padding:24,borderWidth:1,borderStyle:'dashed',borderColor:'#EADDE6',borderRadius:20,gap:9,alignItems:'center'},member:{padding:16,borderRadius:18,borderWidth:1,borderColor:'#EEE0E9',backgroundColor:'#FFF',flexDirection:'row',alignItems:'center',gap:12},iconButton:{padding:10,minWidth:42,minHeight:44,justifyContent:'center',alignItems:'center'},textButton:{paddingVertical:9,paddingHorizontal:4,minHeight:40,justifyContent:'center'},progress:{height:9,backgroundColor:'#F3E2EC',borderRadius:10,overflow:'hidden'},progressFill:{height:'100%',backgroundColor:'#B45B85',borderRadius:10},taskRow:{padding:12,borderWidth:1,borderColor:'#EEE0E9',backgroundColor:'#FFF',borderRadius:17,flexDirection:'row',alignItems:'center'},taskToggle:{flex:1,flexDirection:'row',alignItems:'center',gap:12,paddingVertical:9},strike:{textDecorationLine:'line-through',color:'#998696'},chips:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{paddingHorizontal:13,paddingVertical:10,borderRadius:22,borderWidth:1,borderColor:'#EADCE5',backgroundColor:'#FFF'},selectedChip:{backgroundColor:'#A84974',borderColor:'#A84974'},selectedText:{color:'#FFF',fontSize:13,lineHeight:21,fontWeight:'600'},familyCode:{padding:22,borderRadius:24,backgroundColor:'#F4E5EF',gap:15},code:{fontSize:24,letterSpacing:2,fontWeight:'800',color:'#A14571'},profileAvatar:{width:72,height:72,borderRadius:24,backgroundColor:'#F4E4ED',alignItems:'center',justifyContent:'center'},profileInitial:{fontSize:32,fontWeight:'800',color:'#A04B76'},tip:{flexDirection:'row',alignItems:'center',gap:12,padding:16,borderRadius:17,backgroundColor:'#EDF4EE'},footer:{fontSize:10,letterSpacing:1.1,color:'#B297AB',textAlign:'center',marginTop:9},nav:{flexDirection:'row',backgroundColor:'#FFF',borderTopWidth:1,borderTopColor:'#F0E5EC',paddingVertical:8},navItem:{flex:1,alignItems:'center',gap:3,minHeight:55},navIcon:{paddingHorizontal:14,paddingVertical:6,borderRadius:20},navActive:{backgroundColor:'#F5E6EF'},navText:{fontSize:10,color:'#9F8A9B'},overlay:{flex:1,justifyContent:'center',padding:24,backgroundColor:'rgba(47,26,43,.4)'},modal:{backgroundColor:'#FFFAFC',borderRadius:24,padding:24,gap:16,maxWidth:500,width:'100%',alignSelf:'center'},input:{padding:15,borderRadius:14,borderWidth:1,borderColor:'#DFC6D7',color:'#513D52',fontSize:15,backgroundColor:'#FFF'},errorCard:{backgroundColor:'#FFF0E8',borderRadius:18,padding:18,gap:12}
+
+function IconButton({ label, icon, onPress, light, disabled }: {
+  label: string; icon: Icon; onPress: () => void; light?: boolean; disabled?: boolean;
+}) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress}
+    style={({ pressed }) => [s.iconButton, (pressed || disabled) && s.dim]}>
+    <Ionicons name={icon} size={23} color={light ? '#FFF' : pink} />
+  </Pressable>;
+}
+
+function Chips({ values, selected, onSelect }: { values: readonly string[]; selected: string; onSelect: (value: string) => void }) {
+  return <View style={s.chips}>{values.map(value => <Pressable key={value} accessibilityRole="button"
+    accessibilityState={{ selected: value === selected }} onPress={() => onSelect(value)}
+    style={[s.chip, value === selected && s.chipActive]}>
+    <Text style={s.chipText}>{value}</Text>
+  </Pressable>)}</View>;
+}
+
+function Avatar({ name, size = 36 }: { name: string; size?: number }) {
+  return <View style={[s.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+    <Text style={s.avatarText}>{name.trim().slice(0, 1).toUpperCase()}</Text>
+  </View>;
+}
+
+function Empty({ icon, title, detail }: { icon: Icon; title: string; detail: string }) {
+  return <View style={s.empty}>
+    <Ionicons name={icon} size={26} color={rose} />
+    <Text style={s.cardTitle}>{title}</Text>
+    <Text style={s.emptyDetail}>{detail}</Text>
+  </View>;
+}
+
+function Section({ title, action, onPress }: { title: string; action?: string; onPress?: () => void }) {
+  return <View style={s.between}>
+    <Text style={s.section}>{title}</Text>
+    {action && onPress && <Pressable accessibilityRole="button" onPress={onPress} style={s.textAction}>
+      <Text style={s.link}>{action}</Text>
+    </Pressable>}
+  </View>;
+}
+
+function FocusRing({ session, now, duration, small = false }: {
+  session: FocusSession | null; now: number; duration: number; small?: boolean;
+}) {
+  const remaining = session ? remainingSeconds(session, now) : duration * 60;
+  const focused = session ? focusSeconds([session], now) : 0;
+  const total = remaining + focused;
+  const progress = session && total ? remaining / total : 1;
+  const size = small ? 78 : 222;
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  return <View style={[s.ring, { width: size, height: size }]}>
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Circle cx={50} cy={50} r={radius} stroke="#E4BCCB" strokeWidth={8} fill="none" />
+      {progress > 0 && <Circle cx={50} cy={50} r={radius} stroke={rose} strokeWidth={8} fill="none"
+        strokeLinecap="round" strokeDasharray={[circumference, circumference]}
+        strokeDashoffset={circumference * (1 - progress)} rotation={-90} origin="50, 50" />}
+    </Svg>
+    <View style={s.ringCopy} pointerEvents="none">
+      {!small && <Text style={s.caption}>{currentPause(session) ? 'Paused' : session ? 'Time remaining' : 'Selected duration'}</Text>}
+      <Text accessibilityLabel="Focus time remaining" style={small ? s.miniTime : s.time}>{clockTime(remaining)}</Text>
+      {!small && <Text style={s.caption}>{clockTime(focused)} focused</Text>}
+    </View>
+  </View>;
+}
+
+function TaskCheck({ task, onPress, compact = false, disabled }: {
+  task: Task; onPress: () => void; compact?: boolean; disabled?: boolean;
+}) {
+  return <Pressable accessibilityRole="checkbox" accessibilityLabel={task.title}
+    accessibilityState={{ checked: task.completed, disabled }} disabled={disabled}
+    onPress={onPress} style={[s.taskCheck, compact && s.compactCheck]}>
+    <Ionicons name={task.completed ? 'checkbox' : 'square-outline'} color={rose} size={compact ? 16 : 23} />
+    <View style={s.grow}>
+      <Text numberOfLines={compact ? 1 : undefined} style={[compact ? s.caption : s.cardTitle, task.completed && s.strike]}>{task.title}</Text>
+      {!compact && task.due_date && <Text style={s.caption}>Due {task.due_date}</Text>}
+    </View>
+  </Pressable>;
+}
+
+function RequestRow({ request, name, onPress, compact = false }: {
+  request: FamilyRequest; name: string; onPress: () => void; compact?: boolean;
+}) {
+  const urgent = request.priority === 'emergency';
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open request from ${name}: ${request.message}`}
+    onPress={onPress} style={[s.request, urgent ? s.urgent : s.standard]}>
+    {urgent && !compact && <Text style={s.urgentText}>⚠ Urgent Request</Text>}
+    <View style={s.row}>
+      {!compact && <Avatar name={name} />}
+      <View style={s.grow}>
+        <Text style={s.cardTitle}>{name} <Text style={s.caption}>· {request.category}</Text></Text>
+        <Text style={s.body} numberOfLines={compact ? 1 : 2}>{request.message}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={pink} />
+    </View>
+  </Pressable>;
+}
+
+export default function ParentDashboardScreen({ preview = false }: { preview?: boolean }) {
+  const parent = useParent();
+  return <ParentAccountScreen key={preview ? 'preview' : parent.user?.id ?? 'signed-out'} preview={preview} />;
+}
+
+function ParentAccountScreen({ preview }: { preview: boolean }) {
+  const parent = useParent();
+  const data = preview ? emptyParent() : parent;
+  const { page, child, request, task, period } = useLocalSearchParams<{
+    page?: string; child?: string; request?: string; task?: string; period?: string;
+  }>();
+  const active = page && pages.includes(page) ? page : 'home';
+  const [now, setNow] = useState(Date.now);
+  const [menu, setMenu] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [editor, setEditor] = useState<{ task: Task | null; title: string; dueDate: string } | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!preview && !parent.loading && parent.user?.user_metadata.role !== 'parent') router.replace('/');
+  }, [parent.user, parent.loading, preview]);
+
+  const name = data.profile?.full_name || 'Parent';
+  const unread = data.notifications.filter(note => !note.read_at).length;
+  const session = activeSession(data.sessions, now);
+  const today = localDate(now);
+  const todayTasks = data.tasks.filter(item => !item.due_date || item.due_date <= today);
+  const busy = preview || signingOut || parent.busy || parent.loading || !!parent.error || !data.profile;
+  const status = parentStatus(data.profile, now);
+  const member = data.children.find(profile => profile.id === child);
+  const inboxActive = ['messages', 'conversation', 'compose'].includes(active);
+  const title = active === 'notifications' ? 'Notifications' : 'Quiet Cue';
+  const openThread = (childId: string, requestId?: string) => go('conversation', {
+    child: childId, ...(requestId ? { request: requestId } : {}),
+  });
+  const editTask = (item: Task | null) => setEditor({ task: item, title: item?.title ?? '', dueDate: item?.due_date ?? '' });
+  const removeTask = (item: Task) => showAlert('Delete task?', item.title, [
+    { text: 'Keep task', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: () => void parent.deleteTask(item.id) },
+  ]);
+  const logout = () => {
+    setMenu(false);
+    showAlert('Log out?', 'Your account and activity stay saved on this device.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', onPress: () => {
+        setSigningOut(true);
+        void parent.logout().finally(() => setSigningOut(false));
+      } },
+    ]);
+  };
+
+  const scroll = (content: React.ReactNode) => <ScrollView key={active} style={s.grow}
+    contentContainerStyle={s.content} keyboardShouldPersistTaps="handled"
+    refreshControl={<RefreshControl refreshing={!preview && parent.loading} tintColor={pink} onRefresh={() => void parent.refresh()} />}>
+    {!preview && parent.error && <View style={s.card}>
+      <Text style={s.cardTitle}>Your data could not be loaded</Text>
+      <Text style={s.body}>{parent.error}</Text>
+      <Button label="Retry" icon="refresh" onPress={() => void parent.refresh()} />
+    </View>}
+    {content}
+  </ScrollView>;
+
+  return <SafeAreaView edges={['top', 'bottom']} style={[s.safe, (active === 'conversation' || active === 'compose') && s.threadSafe]}>
+    <StatusBar style={active === 'conversation' || active === 'compose' ? 'dark' : 'light'} />
+    <View style={s.shell}>
+      {active !== 'conversation' && active !== 'compose' && <LinearGradient colors={['#A62C59', '#E6749C', '#FFACCA']} style={s.header}>
+        <Pressable accessibilityRole="button" accessibilityLabel="QuietCue home" onPress={() => go('home')} style={s.brand}>
+          <Image source={require('../../assets/QQ LOGO.png')} style={s.logo} />
+          <Text style={s.brandText}>{title}</Text>
+        </Pressable>
+        <View style={s.row}>
+          <View>
+            <IconButton light label={`Notifications, ${unread} unread`} icon="notifications" onPress={() => go('notifications')} />
+            {unread > 0 && <View style={s.badge} pointerEvents="none"><Text style={s.badgeText}>{unread > 99 ? '99+' : unread}</Text></View>}
+          </View>
+          <IconButton light label="Open menu" icon="menu" onPress={() => setMenu(true)} />
+        </View>
+      </LinearGradient>}
+      <LinearGradient colors={['#FFF0F1', '#F6CBD8', '#FDECEF']} style={s.grow}>
+        {inboxActive && active !== 'messages' ? <Conversation key={`${active}:${child ?? ''}:${request ?? ''}`}
+          data={data} member={member} requestId={request} composing={active === 'compose'} busy={busy}
+          onSend={parent.sendMessage} onAnswer={parent.answer} /> : scroll(<>
+          {active === 'home' && <>
+            <Pressable accessibilityRole="button" accessibilityLabel="Manage availability" onPress={() => go('focus')} style={[s.card, s.accountCard]}>
+              <Avatar name={name} size={48} />
+              <View style={s.grow}>
+                <Text style={s.cardTitle}>Parent · {name}</Text>
+                <View style={[s.statusPill, { alignSelf: 'flex-start' }]}>
+                  <View style={[s.dot, { backgroundColor: session && !currentPause(session) ? '#D42854' : status.color }]} />
+                  <Text style={s.caption}>{status.label}{session && !currentPause(session) ? ` · Available at ${timeLabel(session.planned_end)}` : ''}</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" color={pink} size={16} />
+            </Pressable>
+            <View style={s.homeGrid}>
+              <View style={[s.card, s.homeCard, s.focusCard]}>
+                <Text style={s.cardTitle}>Focus Session</Text>
+                <FocusRing session={session} now={now} duration={25} small />
+                <Text style={s.caption}>{clockTime(focusSeconds(data.sessions, now, startOfLocalDay(now)))} focused today</Text>
+                <Button label={session ? 'View Session' : 'Start Session'} onPress={() => go('focus')} />
+              </View>
+              <View style={[s.card, s.homeCard]}>
+                <Text style={s.cardTitle}>Today’s Tasks</Text>
+                {todayTasks.length ? todayTasks.slice(0, 5).map(item => <TaskCheck key={item.id} task={item} compact disabled={busy}
+                  onPress={() => void parent.toggleTask(item)} />) : <Text style={s.caption}>No tasks yet.</Text>}
+                <Pressable accessibilityRole="button" onPress={() => go('tasks')} style={s.textAction}>
+                  <Text style={s.link}>{todayTasks.length ? 'View All' : 'Add a task'}</Text>
+                </Pressable>
+              </View>
+            </View>
+            <Section title="Pending Requests" action="View all" onPress={() => go('messages')} />
+            {data.requests.some(item => item.status !== 'done') ? [...data.requests]
+              .filter(item => item.status !== 'done')
+              .sort((a, b) => Number(b.priority === 'emergency') - Number(a.priority === 'emergency')).slice(0, 4)
+              .map(item => <RequestRow key={item.id} request={item} compact
+                name={data.children.find(profile => profile.id === item.child_id)?.full_name ?? 'Family member'}
+                onPress={() => openThread(item.child_id, item.id)} />)
+              : <Empty title="No pending requests" detail="Requests from connected family members appear here." icon="mail-open-outline" />}
+            <Section title="Family Overview" action="Family code" onPress={() => go('family')} />
+            <FamilyList members={data.children} onOpen={profile => openThread(profile.id)} />
+          </>}
+          {active === 'tasks' && <TasksPage data={data} today={today} busy={busy}
+            onAdd={() => editTask(null)} onEdit={editTask} onDelete={removeTask} onToggle={parent.toggleTask} />}
+          {active === 'focus' && <FocusPage key={task ?? 'focus'} data={data} session={session} now={now}
+            taskId={task} busy={busy} onStart={parent.startFocus} onPause={parent.setFocusPaused} onEnd={parent.endFocus} />}
+          {active === 'messages' && <Inbox data={data} onOpen={openThread} />}
+          {active === 'notifications' && <>
+            <Section title="Notifications" />
+            <Text style={s.caption}>{unread} unread family updates</Text>
+            {unread > 0 && <Button label="Mark all as read" icon="checkmark-done" disabled={busy} subtle onPress={() => void parent.markRead()} />}
+            {data.notifications.map(note => {
+              const related = data.requests.find(item => item.id === note.request_id);
+              const childId = note.child_id ?? related?.child_id;
+              const open = async () => {
+                if (!note.read_at && !await parent.markRead(note.id)) return;
+                if (childId && note.kind !== 'child_connected') openThread(childId, note.request_id ?? undefined);
+                else go('family');
+              };
+              return <View key={note.id} style={[s.request, note.kind === 'emergency' ? s.urgent : s.standard]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Open notification: ${note.title}`} onPress={() => void open()} style={s.row}>
+                  <Ionicons name={note.kind === 'emergency' ? 'warning' : 'notifications-outline'} size={20} color={pink} />
+                  <View style={s.grow}>
+                    <Text style={s.cardTitle}>{note.title}</Text>
+                    <Text style={s.body}>{note.body}</Text>
+                    <Text style={s.caption}>{timeLabel(note.created_at)} · {note.read_at ? 'Read' : 'New'}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={pink} />
+                </Pressable>
+                {!note.read_at && <Button label="Mark as read" subtle disabled={busy} onPress={() => void parent.markRead(note.id)} />}
+              </View>;
+            })}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>Weekly Report</Text>
+              <Text style={s.body}>Review your focus time and completed tasks.</Text>
+              <Button label="View weekly report" subtle onPress={() => go('reports', { period: 'week' })} />
+            </View>
+          </>}
+          {active === 'family' && <>
+            <Section title="My family" />
+            <View style={s.card}>
+              <Text style={s.cardTitle}>Your family code</Text>
+              <Text selectable style={s.code}>{data.code || '—'}</Text>
+              <Text style={s.body}>On this device, open the Child profile and enter the code under My family.</Text>
+              <Button label={Platform.OS === 'web' ? 'Copy family code' : 'Share family code'} icon="share-social-outline"
+                disabled={!data.code} onPress={() => void shareFamilyCode(data.code)} />
+            </View>
+            <Section title="Connected family" />
+            <FamilyList members={data.children} onOpen={profile => openThread(profile.id)} />
+          </>}
+          {active === 'reports' && <Reports data={data} now={now} weekly={period === 'week'} />}
+          {active === 'profile' && <>
+            <Section title="My profile" />
+            <View style={s.card}>
+              <Avatar name={name} size={64} />
+              <Text style={s.section}>{name}</Text>
+              <Text style={s.body}>{parent.user?.email}</Text>
+              <Text style={s.caption}>Parent account · Saved on this device</Text>
+            </View>
+            <Button label="My family & family code" subtle onPress={() => go('family')} />
+            <Button label="Notifications" subtle onPress={() => go('notifications')} />
+            <Button label="Today’s report" subtle onPress={() => go('reports')} />
+            <Button label="Log out" icon="log-out-outline" disabled={busy} onPress={logout} />
+          </>}
+        </>)}
+        {(active === 'tasks' || active === 'messages') && <Pressable accessibilityRole="button"
+          accessibilityLabel={active === 'tasks' ? 'Add a task' : 'New conversation'}
+          disabled={busy} onPress={() => active === 'tasks' ? editTask(null) : go('compose')}
+          style={[s.floating, busy && s.dim]}>
+          <LinearGradient colors={['#E97F9F', '#AA2C60']} style={s.floatingFill}><Ionicons name="add" color="#FFF" size={30} /></LinearGradient>
+        </Pressable>}
+      </LinearGradient>
+      {active !== 'conversation' && active !== 'compose' && <LinearGradient colors={['#FFC0D4', '#E482A7', '#BC4A78']} style={s.navBase}>
+        <View style={s.nav}>
+          {tabs.map(tab => {
+            const selected = active === tab.id || (tab.id === 'messages' && inboxActive);
+            return <Pressable key={tab.id} accessibilityRole="tab" accessibilityLabel={tab.label}
+              accessibilityState={{ selected }} onPress={() => go(tab.id)} style={[s.tab, selected && s.tabActive]}>
+              <Ionicons name={tab.icon} size={21} color={selected ? pink : '#FFF'} />
+              <Text style={[s.tabText, selected && s.tabTextActive]}>{tab.label}</Text>
+            </Pressable>;
+          })}
+        </View>
+      </LinearGradient>}
+      <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
+        <View style={s.overlay}><View style={s.modal}>
+          <View style={s.between}><Text style={s.section}>Quiet Cue</Text><IconButton label="Close menu" icon="close" onPress={() => setMenu(false)} /></View>
+          {[
+            ['My profile', 'profile'], ['My family', 'family'], ['Notifications', 'notifications'], ['Reports', 'reports'],
+          ].map(([label, route]) => <Button key={route} label={label} subtle onPress={() => { setMenu(false); go(route); }} />)}
+          <Button label="Log out" icon="log-out-outline" disabled={busy} onPress={logout} />
+        </View></View>
+      </Modal>
+      <Modal visible={editor !== null} transparent animationType="fade" onRequestClose={() => { if (!parent.busy) setEditor(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.overlay}>
+          {editor && <View style={s.modal}>
+            <Text style={s.section}>{editor.task ? 'Edit task' : 'Add a task'}</Text>
+            <TextInput accessibilityLabel="Task name" autoFocus value={editor.title} maxLength={120} placeholder="What would you like to do?"
+              placeholderTextColor={muted} onChangeText={value => setEditor({ ...editor, title: value })} style={s.input} />
+            <Text style={s.caption}>Due date (optional)</Text>
+            <TextInput accessibilityLabel="Due date" value={editor.dueDate} maxLength={10} placeholder="YYYY-MM-DD"
+              placeholderTextColor={muted} onChangeText={value => setEditor({ ...editor, dueDate: value })} style={s.input} />
+            <Button label="Save task" icon="checkmark" disabled={busy || !editor.title.trim()} onPress={async () => {
+              if (await parent.saveTask(editor.title, editor.task?.id, editor.dueDate.trim() || null)) setEditor(null);
+            }} />
+            <Button label="Cancel" subtle disabled={parent.busy} onPress={() => setEditor(null)} />
+          </View>}
+        </KeyboardAvoidingView>
+      </Modal>
+      <Modal visible={signingOut} animationType="fade" onRequestClose={() => {}}>
+        <ImageBackground source={require('../../assets/DesignBG.png')} resizeMode="cover" style={s.logout}>
+          <Image source={require('../../assets/QQ LOGO.png')} style={s.logoutLogo} />
+          <ActivityIndicator color="#FFF" />
+          <Text style={s.brandText}>Logging out…</Text>
+        </ImageBackground>
+      </Modal>
+    </View>
+  </SafeAreaView>;
+}
+
+function TasksPage({ data, today, busy, onAdd, onEdit, onDelete, onToggle }: {
+  data: ParentSnapshot; today: string; busy: boolean; onAdd: () => void;
+  onEdit: (task: Task) => void; onDelete: (task: Task) => void; onToggle: (task: Task) => Promise<boolean>;
+}) {
+  const [filter, setFilter] = useState('All Tasks');
+  const tasks = data.tasks.filter(task => {
+    if (filter === 'Today') return !task.due_date || task.due_date <= today;
+    if (filter === 'Upcoming') return !!task.due_date && task.due_date > today;
+    return true;
+  });
+
+  return <View style={s.fabSpace}>
+    <Chips values={['All Tasks', 'Today', 'Upcoming', 'Requests']} selected={filter}
+      onSelect={value => value === 'Requests' ? go('messages') : setFilter(value)} />
+    <Pressable accessibilityRole="button" accessibilityLabel="Add a new task" disabled={busy} onPress={onAdd} style={s.addField}>
+      <Ionicons name="add" size={21} color={pink} /><Text style={s.body}>Add a new task...</Text>
+    </Pressable>
+    <Section title={filter === 'Upcoming' ? 'Upcoming Work' : filter === 'Today' ? 'Today’s Work' : 'My Tasks'} />
+    <Text style={s.caption}>{tasks.filter(task => task.completed).length} of {tasks.length} completed</Text>
+    {tasks.length ? tasks.map(task => <View key={task.id} style={s.taskRow}>
+      <TaskCheck task={task} disabled={busy} onPress={() => void onToggle(task)} />
+      {!task.completed && <IconButton label={`Focus on ${task.title}`} icon="timer-outline" disabled={busy}
+        onPress={() => go('focus', { task: task.id })} />}
+      <IconButton label={`Edit ${task.title}`} icon="create-outline" disabled={busy} onPress={() => onEdit(task)} />
+      <IconButton label={`Delete ${task.title}`} icon="trash-outline" disabled={busy} onPress={() => onDelete(task)} />
+    </View>) : <Empty title="No tasks here yet" detail="Add a task or choose a different filter." icon="clipboard-outline" />}
+  </View>;
+}
+
+function FocusPage({ data, session, now, taskId, busy, onStart, onPause, onEnd }: {
+  data: ParentSnapshot; session: FocusSession | null; now: number; taskId?: string; busy: boolean;
+  onStart: (minutes: number, taskId: string | null) => Promise<boolean>;
+  onPause: (paused: boolean) => Promise<boolean>;
+  onEnd: (status?: 'available' | 'break') => Promise<boolean>;
+}) {
+  const [duration, setDuration] = useState('25 min');
+  const [selectedTaskId, setSelectedTaskId] = useState(taskId ?? '');
+  const paused = !!currentPause(session);
+  const minutes = Number.parseInt(duration, 10);
+  const unfinished = data.tasks.filter(task => !task.completed);
+  const selected = unfinished.find(task => task.id === selectedTaskId);
+  const task = session ? data.tasks.find(task => task.id === session.task_id) : selected;
+
+  return <>
+    <View style={s.focusCenter}>
+      <Text style={s.heading}>{session ? 'Current Session' : 'Focus Session'}</Text>
+      <Text style={s.body}>{task?.title ?? 'Quiet focus'}</Text>
+      <FocusRing session={session} now={now} duration={minutes} />
+      {session && !paused && <Text style={s.caption}>Available at {timeLabel(session.planned_end)}</Text>}
+      <Text style={s.cardTitle}>Focus Controls</Text>
+      {session ? <View style={s.controls}>
+        <Button label="Stop" icon="stop" disabled={busy} onPress={() => void onEnd()} />
+        <Button label={paused ? 'Resume' : 'Pause'} icon={paused ? 'play' : 'pause'} subtle disabled={busy} onPress={() => void onPause(!paused)} />
+        <Button label="Skip" icon="play-skip-forward" disabled={busy} onPress={() => void onEnd('break')} />
+      </View> : <Button label="Start a focus session" icon="play" disabled={busy} onPress={() => void onStart(minutes, selected?.id ?? null)} />}
+    </View>
+    {!session && <View style={s.card}>
+      <Text style={s.cardTitle}>Choose your focus time</Text>
+      <Chips values={['15 min', '25 min', '50 min']} selected={duration} onSelect={setDuration} />
+      <Text style={s.cardTitle}>Focus on a task (optional)</Text>
+      <Button label="Just focus" subtle={!!selected} onPress={() => setSelectedTaskId('')} />
+      {unfinished.map(item => <Button key={item.id} label={item.title} subtle={selected?.id !== item.id}
+        onPress={() => setSelectedTaskId(item.id)} />)}
+    </View>}
+    <View style={s.card}>
+      <Text style={s.cardTitle}>Availability</Text>
+      <Text style={s.body}>Current: {parentStatus(data.profile, now).label}</Text>
+      <View style={s.controls}>
+        <Button label="Available" subtle disabled={busy} onPress={() => void onEnd()} />
+        <Button label="On a break" subtle disabled={busy} onPress={() => void onEnd('break')} />
+      </View>
+    </View>
+    <Button label="View today’s report" subtle onPress={() => go('reports')} />
+  </>;
+}
+
+function Inbox({ data, onOpen }: { data: ParentSnapshot; onOpen: (childId: string, requestId?: string) => void }) {
+  const [filter, setFilter] = useState('Waiting');
+  const requests = [...data.requests].filter(request => filter === 'All' || request.status === (
+    filter === 'Waiting' ? 'pending' : filter === 'Seen' ? 'acknowledged' : 'done'
+  )).sort((a, b) => Number(b.priority === 'emergency') - Number(a.priority === 'emergency'));
+  const contacts = data.children.filter(member => data.messages.some(message => message.child_id === member.id));
+
+  return <View style={s.fabSpace}>
+    <Text style={s.heading}>Message Requests</Text>
+    <Chips values={['Waiting', 'Seen', 'Done', 'All']} selected={filter} onSelect={setFilter} />
+    {requests.length ? requests.map(request => <RequestRow key={request.id} request={request}
+      name={data.children.find(member => member.id === request.child_id)?.full_name ?? 'Family member'}
+      onPress={() => onOpen(request.child_id, request.id)} />)
+      : <Empty title="No requests in this view" detail="Use the filters or start a conversation with a connected family member." icon="mail-outline" />}
+    {contacts.length > 0 && <>
+      <Section title="Conversations" />
+      <FamilyList members={contacts} onOpen={member => onOpen(member.id)} />
+    </>}
+  </View>;
+}
+
+function FamilyList({ members, onOpen }: { members: Profile[]; onOpen: (member: Profile) => void }) {
+  return members.length ? members.map(member => <Pressable key={member.id} accessibilityRole="button"
+    accessibilityLabel={`Open conversation with ${member.full_name}`} style={s.member}
+    onPress={() => onOpen(member)}>
+    <Avatar name={member.full_name} />
+    <View style={s.grow}>
+      <Text style={s.cardTitle}>{member.full_name}</Text>
+      <Text style={s.caption}>{member.role === 'child' ? 'Child' : 'Family member'}</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={16} color={pink} />
+  </Pressable>) : <Empty title="No family members connected" detail="Connect a Child or Family account using your family code on this device." icon="people-outline" />;
+}
+
+function Conversation({ data, member, requestId, composing, busy, onSend, onAnswer }: {
+  data: ParentSnapshot; member?: Profile; requestId?: string; composing: boolean; busy: boolean;
+  onSend: (childId: string, body: string, attachment?: AttachmentDraft) => Promise<boolean>;
+  onAnswer: (id: string, status: 'acknowledged' | 'done') => Promise<boolean>;
+}) {
+  const [recipient, setRecipient] = useState<Profile | undefined>(member);
+  const [body, setBody] = useState('');
+  const [attachment, setAttachment] = useState<AttachmentDraft>();
+  const [picking, setPicking] = useState(false);
+  const thread = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const requests = data.requests.filter(request => request.child_id === recipient?.id);
+  const messages = data.messages.filter(message => message.child_id === recipient?.id);
+  const timeline = [
+    ...requests.map(request => ({ key: `r${request.id}`, created: request.created_at, request })),
+    ...messages.map(message => ({ key: `m${message.id}`, created: message.created_at, message })),
+  ].sort((a, b) => a.created.localeCompare(b.created));
+  const attach = async () => {
+    setPicking(true);
+    try {
+      const file = await pickAttachment();
+      if (file) setAttachment(file);
+    } catch (cause) {
+      showAlert('Could not attach file', errorMessage(cause));
+    } finally {
+      setPicking(false);
+    }
+  };
+  const send = async () => {
+    if (recipient && await onSend(recipient.id, body, attachment)) {
+      setBody('');
+      setAttachment(undefined);
+      if (composing) go('conversation', { child: recipient.id });
+    }
+  };
+
+  return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.grow}>
+    <View style={s.conversationHeader}>
+      <IconButton label="Back to inbox" icon="arrow-back" onPress={() => go('messages')} />
+      {recipient && <Avatar name={recipient.full_name} />}
+      <View style={s.grow}>
+        <Text style={s.cardTitle}>{composing ? 'New Conversation' : recipient?.full_name ?? 'Conversation'}</Text>
+        {!composing && <Text style={s.caption}>Saved on this device</Text>}
+      </View>
+      {composing && recipient && <IconButton label="Change recipient" icon="person-add-outline"
+        onPress={() => { setRecipient(undefined); setAttachment(undefined); }} />}
+    </View>
+    <ScrollView ref={thread} style={s.grow} contentContainerStyle={s.thread} keyboardShouldPersistTaps="handled"
+      onContentSizeChange={() => { if (!requestId) thread.current?.scrollToEnd({ animated: false }); }}>
+      {composing && !recipient ? <>
+        <Text style={s.section}>Recipient</Text>
+        <FamilyList members={data.children} onOpen={setRecipient} />
+        {!data.children.length && <Button label="Open family code" subtle onPress={() => go('family')} />}
+      </> : <>
+        {composing && recipient && <Text style={s.caption}>To: {recipient.full_name}</Text>}
+        {timeline.length === 0 && recipient && <Text style={s.emptyDetail}>Start the conversation with a message.</Text>}
+        {!recipient && !composing && <Empty title="Conversation unavailable" detail="Choose a connected family member from the inbox." icon="chatbubbles-outline" />}
+        {timeline.map(item => 'request' in item ? <View key={item.key}
+          style={[s.bubble, item.request.priority === 'emergency' && s.urgent, item.request.id === requestId && s.highlight]}>
+          <Text style={s.cardTitle}>{item.request.priority === 'emergency' ? '⚠ Urgent Request' : item.request.category}</Text>
+          <Text style={s.body}>{item.request.message}</Text>
+          <Text style={s.caption}>{timeLabel(item.created)} · {item.request.status === 'pending' ? 'Waiting' : item.request.status === 'acknowledged' ? 'Seen' : 'Done'}</Text>
+          {item.request.status !== 'done' && <View style={s.controls}>
+            {item.request.status === 'pending' && <Button label="Mark as seen" subtle disabled={busy} onPress={() => void onAnswer(item.request.id, 'acknowledged')} />}
+            <Button label="Mark as done" subtle disabled={busy} onPress={() => void onAnswer(item.request.id, 'done')} />
+          </View>}
+        </View> : <View key={item.key} style={[s.bubble, item.message.sender === 'parent' && s.outgoing]}>
+          {item.message.body !== '' && <Text style={s.body}>{item.message.body}</Text>}
+          {item.message.attachment && <MessageAttachment attachment={item.message.attachment} />}
+          <Text style={s.caption}>{timeLabel(item.created)}</Text>
+        </View>)}
+      </>}
+    </ScrollView>
+    {attachment && <View style={s.composer}>
+      <Text style={[s.body, s.grow]} numberOfLines={1}>{attachment.name}</Text>
+      <IconButton label="Remove attachment" icon="close" disabled={busy} onPress={() => setAttachment(undefined)} />
+    </View>}
+    <View style={s.composer}>
+      <IconButton label="Attach a photo or PDF" icon="add" disabled={busy || !recipient || picking} onPress={() => void attach()} />
+      <TextInput accessibilityLabel="Message" placeholder="Message" placeholderTextColor={muted}
+        editable={!!recipient && !busy} multiline maxLength={500} value={body} onChangeText={setBody}
+        style={[s.input, s.messageInput]} />
+      <IconButton label="Send message" icon="send" disabled={busy || !recipient || picking || (!body.trim() && !attachment)} onPress={() => void send()} />
+    </View>
+  </KeyboardAvoidingView>;
+}
+
+function Reports({ data, now, weekly }: { data: ParentSnapshot; now: number; weekly: boolean }) {
+  const start = new Date(startOfLocalDay(now));
+  if (weekly) start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+  const cutoff = start.getTime();
+  const sessions = data.sessions.filter(session => (
+    Date.parse(session.ended_at ?? session.planned_end) >= cutoff || !!currentPause(session)
+  ));
+  const done = data.tasks.filter(task => task.completed_at && Date.parse(task.completed_at) >= cutoff).length;
+  return <>
+    <Text style={s.heading}>{weekly ? 'Weekly Report' : 'Today’s report'}</Text>
+    <Chips values={['Today', 'This week']} selected={weekly ? 'This week' : 'Today'}
+      onSelect={value => go('reports', { period: value === 'This week' ? 'week' : 'today' })} />
+    <View style={s.card}>
+      <Text style={s.cardTitle}>{clockTime(focusSeconds(sessions, now, cutoff))} focus time</Text>
+      <Text style={s.body}>{done} tasks completed · {sessions.length} sessions</Text>
+    </View>
+    <Section title="Focus Sessions" />
+    {sessions.length ? sessions.map(session => <View key={session.id} style={s.card}>
+      <Text style={s.cardTitle}>{data.tasks.find(task => task.id === session.task_id)?.title ?? 'Quiet focus'}</Text>
+      <Text style={s.body}>{timeLabel(session.started_at)} · {clockTime(focusSeconds([session], now, cutoff))} focused</Text>
+    </View>) : <Empty title="No focus sessions yet" detail="Start a focus session to track your time here." icon="timer-outline" />}
+    <Button label="Go to Focus" subtle onPress={() => go('focus')} />
+  </>;
+}
+
+async function shareFamilyCode(code: string) {
+  const message = `Open QuietCue → Child Profile → My family on this device and enter ${code}.`;
+  try {
+    if (Platform.OS === 'web') {
+      await navigator.clipboard.writeText(code);
+      showAlert('Family code copied', code);
+    } else {
+      await Share.share({ message });
+    }
+  } catch {
+    showAlert('Copy your family code', code);
+  }
+}
+
+function timeLabel(value: string) {
+  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#A62C59' },
+  threadSafe: { backgroundColor: '#FFF5F5' },
+  shell: { flex: 1, width: '100%', maxWidth: 620, alignSelf: 'center', backgroundColor: '#FFF0F1' },
+  grow: { flex: 1 },
+  header: { minHeight: 82, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', zIndex: 1, boxShadow: '0 2px 4px #9F48654D' },
+  brand: { flexDirection: 'row', gap: 5, alignItems: 'center', minHeight: 44 },
+  logo: { width: 28, height: 28, borderRadius: 14 },
+  brandText: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  content: { flexGrow: 1, padding: 16, paddingBottom: 24, gap: 12 },
+  heading: { color: dark, fontSize: 26, fontWeight: '700', letterSpacing: -0.65 },
+  section: { color: dark, fontSize: 18, fontWeight: '700', flexShrink: 1 },
+  card: { padding: 14, borderRadius: 15, backgroundColor: '#FFF9FA', gap: 10, borderWidth: 1, borderColor: '#F0CCD7', boxShadow: '0 2px 5px #77304C26' },
+  accountCard: { backgroundColor: '#F6B3CB', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#B8416D', borderWidth: 2, borderColor: '#FFDFEA' },
+  avatarText: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+  statusPill: { marginTop: 5, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF1F4' },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  homeGrid: { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
+  homeCard: { flex: 1, padding: 10, gap: 6 },
+  focusCard: { backgroundColor: '#FFDCE7', alignItems: 'center' },
+  cardTitle: { color: dark, fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  body: { color: dark, fontSize: 14, lineHeight: 20 },
+  caption: { color: muted, fontSize: 12, lineHeight: 16 },
+  empty: { borderRadius: 13, padding: 18, backgroundColor: '#FFF5F7', borderWidth: 1, borderColor: '#E9B8CC', alignItems: 'center', gap: 5 },
+  emptyDetail: { color: muted, fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  button: { backgroundColor: pink, minHeight: 42, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 22, gap: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  buttonText: { color: '#FFF', fontSize: 13, fontWeight: '700', flexShrink: 1, textAlign: 'center' },
+  subtleButton: { backgroundColor: '#F8C4D7' },
+  subtleText: { color: '#782140' },
+  iconButton: { minWidth: 42, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  dim: { opacity: 0.5 },
+  link: { color: pink, fontSize: 13, fontWeight: '700' },
+  textAction: { paddingVertical: 8, alignSelf: 'flex-start' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  chip: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 6, backgroundColor: '#F9CFDF', borderWidth: 1, borderColor: 'transparent', borderRadius: 20 },
+  chipActive: { backgroundColor: '#F3A8C4', borderColor: '#C0527C' },
+  chipText: { color: '#70223F', fontSize: 12, fontWeight: '600' },
+  fabSpace: { gap: 12, paddingBottom: 58 },
+  addField: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: rose, borderRadius: 8, backgroundColor: '#FFF' },
+  taskRow: { minHeight: 54, paddingHorizontal: 5, backgroundColor: '#FFF', borderRadius: 10, flexDirection: 'row', alignItems: 'center', boxShadow: '0 2px 4px #77304C26' },
+  taskCheck: { flex: 1, minHeight: 44, paddingLeft: 7, flexDirection: 'row', gap: 7, alignItems: 'center' },
+  compactCheck: { flex: 0, minHeight: 24, paddingLeft: 0 },
+  strike: { textDecorationLine: 'line-through', color: muted },
+  floating: { position: 'absolute', right: 22, bottom: 14, width: 53, height: 53, borderRadius: 17, overflow: 'hidden', boxShadow: '0 4px 6px #77304C55' },
+  floatingFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  request: { gap: 6, borderRadius: 12, padding: 11, borderWidth: 1, borderLeftWidth: 4, boxShadow: '0 2px 4px #77304C26' },
+  urgent: { borderColor: '#D71140', backgroundColor: '#FFD9DE' },
+  standard: { borderColor: '#C78D29', backgroundColor: '#FFF2D5' },
+  urgentText: { color: '#A31237', fontSize: 13, fontWeight: '800' },
+  member: { padding: 10, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF7FA', borderRadius: 12, boxShadow: '0 2px 4px #77304C26' },
+  focusCenter: { alignItems: 'center', gap: 13, paddingVertical: 5 },
+  ring: { alignItems: 'center', justifyContent: 'center' },
+  ringCopy: { position: 'absolute', alignItems: 'center', gap: 4 },
+  time: { color: dark, fontSize: 34, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  miniTime: { color: dark, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  controls: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  conversationHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 58, borderBottomWidth: 1, borderColor: '#DFBCC9', backgroundColor: '#FFF5F5', paddingHorizontal: 9 },
+  thread: { flexGrow: 1, justifyContent: 'flex-end', padding: 15, gap: 12 },
+  bubble: { maxWidth: '90%', alignSelf: 'flex-start', padding: 11, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', backgroundColor: '#FFF', gap: 5 },
+  highlight: { borderColor: rose },
+  outgoing: { alignSelf: 'flex-end', backgroundColor: '#F6B1CE' },
+  composer: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10, backgroundColor: '#FFF5F7', borderTopWidth: 1, borderColor: '#E5B6C7' },
+  messageInput: { flex: 1, borderRadius: 21, maxHeight: 95 },
+  code: { fontSize: 24, letterSpacing: 2, fontWeight: '800', color: pink },
+  badge: { position: 'absolute', right: 0, top: 0, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: '#8C1746', alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: '800' },
+  navBase: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 8 },
+  nav: { flexDirection: 'row', borderRadius: 24, borderWidth: 1, borderColor: '#FFD6E3', backgroundColor: '#FFFFFF22', padding: 3 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 48, borderRadius: 20 },
+  tabActive: { backgroundColor: '#FBD1DF' },
+  tabText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+  tabTextActive: { color: pink },
+  overlay: { flex: 1, justifyContent: 'center', padding: 22, backgroundColor: '#49203270' },
+  modal: { width: '100%', maxWidth: 450, alignSelf: 'center', padding: 18, borderRadius: 21, backgroundColor: '#FFF4F8', gap: 10 },
+  input: { paddingHorizontal: 12, paddingVertical: 10, minHeight: 42, backgroundColor: '#FFF', borderRadius: 10, borderWidth: 1, borderColor: '#D78CAA', fontSize: 14, color: dark },
+  logout: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 15 },
+  logoutLogo: { width: 84, height: 84, borderRadius: 42 },
 });

@@ -18,7 +18,12 @@ In a Parent account, open **Tasks** to add, edit, complete, or delete a task.
 Open **Family** to copy the family code, then log out from **Profile**.
 Create a Child account with a different email in the same browser or app
 installation. Enter the code under **Profile**, then send a request.
-Switch back to Parent to see it under **Family** and **Notifications**.
+Switch back to Parent to see it under **Inbox** and **Notifications**.
+Open a request to mark it seen or done, send a reply, or attach a photo or PDF
+up to 1 MB. Child replies are available under **History → Messages with my parent**.
+
+Add an optional due date to show a task under **Upcoming**. The focus timer can
+pause, resume, stop, or skip to a break.
 
 Accounts and activity stay in the current browser or app installation. To keep
 an existing passwordless profile, sign up with its previous email and role to

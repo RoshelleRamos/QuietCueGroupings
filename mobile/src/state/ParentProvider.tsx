@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { router } from 'expo-router';
 
 import { localStore, type User } from '../lib/local-store';
+import type { AttachmentDraft } from '../lib/message-attachments';
 import { errorMessage } from '../lib/family';
 import { emptyParent, forAccount, type ParentSnapshot, type Task } from '../lib/parent-model';
 import { showAlert } from '../lib/show-alert';
@@ -12,10 +13,12 @@ type ParentContext = ParentSnapshot & {
   error: string;
   busy: boolean;
   refresh: () => Promise<void>;
-  saveTask: (title: string, id?: string) => Promise<boolean>;
+  saveTask: (title: string, id?: string, dueDate?: string | null) => Promise<boolean>;
   toggleTask: (task: Task) => Promise<boolean>;
   deleteTask: (id: string) => Promise<boolean>;
   startFocus: (minutes: number, taskId: string | null) => Promise<boolean>;
+  setFocusPaused: (paused: boolean) => Promise<boolean>;
+  sendMessage: (childId: string, body: string, attachment?: AttachmentDraft) => Promise<boolean>;
   endFocus: (status?: 'available' | 'break') => Promise<boolean>;
   answer: (id: string, status: 'acknowledged' | 'done') => Promise<boolean>;
   markRead: (id?: string) => Promise<boolean>;
@@ -93,10 +96,12 @@ export function ParentProvider({ children }: { children: React.ReactNode }) {
   const value: ParentContext = {
     ...forAccount(snapshot, user?.id ?? null),
     user, loading, error, busy, refresh,
-    saveTask: (title, id) => run(uid => localStore.saveTask(uid, title, id)),
+    saveTask: (title, id, dueDate) => run(uid => localStore.saveTask(uid, title, id, dueDate)),
     toggleTask: task => run(uid => localStore.toggleTask(uid, task.id)),
     deleteTask: id => run(uid => localStore.deleteTask(uid, id)),
     startFocus: (minutes, taskId) => run(uid => localStore.startFocus(uid, minutes, taskId)),
+    setFocusPaused: paused => run(uid => localStore.setFocusPaused(uid, paused)),
+    sendMessage: (childId, body, attachment) => run(uid => localStore.sendMessage(uid, childId, body, 'parent', attachment)),
     endFocus: (status = 'available') => run(uid => localStore.endFocus(uid, status)),
     answer: (id, status) => run(uid => localStore.answer(uid, id, status)),
     markRead: id => run(uid => localStore.markRead(uid, id)),

@@ -2,10 +2,11 @@ import { pbkdf2Async } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getRandomBytesAsync } from 'expo-crypto';
+import { getRandomBytesAsync, randomUUID } from 'expo-crypto';
 
-import type { FamilyRequest, Profile } from './family';
-import { startOfLocalDay, type FocusSession, type ParentNotification, type ParentSnapshot, type Task } from './parent-model';
+import { attachmentKey, type AttachmentDraft } from './message-attachments';
+import type { FamilyMessage, FamilyRequest, Profile } from './family';
+import { activeSession, currentPause, localDate, type FocusSession, type ParentNotification, type ParentSnapshot, type Task } from './parent-model';
 
 export type Role = 'parent' | 'family' | 'child';
 export type Registration = { fullName: string; email: string; password: string };
@@ -18,6 +19,7 @@ type LocalData = {
   accounts: Account[];
   links: Record<string, string>;
   requests: FamilyRequest[];
+  messages?: FamilyMessage[];
   tasks: Task[];
   sessions: FocusSession[];
   notifications: ParentNotification[];
@@ -85,8 +87,8 @@ function findTask(data: LocalData, userId: string, taskId: string) {
   return task;
 }
 
-function notify(data: LocalData, recipient: string, kind: ParentNotification['kind'], title: string, body: string, requestId: string | null = null) {
-  data.notifications.unshift({ id: id(data), recipient_id: recipient, kind, title, body, request_id: requestId, created_at: now(), read_at: null });
+function notify(data: LocalData, recipient: string, kind: ParentNotification['kind'], title: string, body: string, requestId: string | null = null, childId?: string) {
+  data.notifications.unshift({ id: id(data), recipient_id: recipient, kind, title, body, request_id: requestId, child_id: childId, created_at: now(), read_at: null });
 }
 
 async function passwordVerifier(password: string, salt: Uint8Array) {
@@ -143,13 +145,13 @@ export const localStore = {
   async loadParent(userId: string): Promise<ParentSnapshot> {
     const data = await read();
     const parent = requireAccount(data, userId, true);
-    const today = startOfLocalDay(Date.now());
     return {
       ownerId: userId,
       profile: parent.profile,
       children: data.accounts.filter(row => data.links[row.user.id] === userId).map(row => row.profile),
+      messages: (data.messages ?? []).filter(row => row.parent_id === userId),
       tasks: data.tasks.filter(row => row.user_id === userId),
-      sessions: data.sessions.filter(row => row.user_id === userId && Date.parse(row.planned_end) >= today),
+      sessions: data.sessions.filter(row => row.user_id === userId),
       requests: data.requests.filter(row => row.parent_id === userId).slice(0, 100),
       notifications: data.notifications.filter(row => row.recipient_id === userId).slice(0, 100),
       code: parent.familyCode,
@@ -160,6 +162,7 @@ export const localStore = {
     const child = requireAccount(data, userId, false);
     return {
       own: child.profile,
+      messages: (data.messages ?? []).filter(row => row.child_id === userId && row.parent_id === data.links[userId]),
       parent: data.accounts.find(row => row.user.id === data.links[userId])?.profile ?? null,
       requests: data.requests.filter(row => row.child_id === userId).slice(0, 100),
     };
@@ -172,7 +175,7 @@ export const localStore = {
       if (data.links[userId] === parent.user.id) return;
       if (data.links[userId]) throw new Error('This account already has a connected parent.');
       data.links[userId] = parent.user.id;
-      notify(data, parent.user.id, 'child_connected', 'Family member connected', `${child.profile.full_name} joined your family.`);
+      notify(data, parent.user.id, 'child_connected', 'Family member connected', `${child.profile.full_name} joined your family.`, null, userId);
     });
   },
   sendRequest(userId: string, category: string, message: string, priority: FamilyRequest['priority']) {
@@ -187,8 +190,35 @@ export const localStore = {
       });
       const urgent = priority === 'emergency';
       notify(data, parentId, urgent ? 'emergency' : 'request',
-        urgent ? 'Urgent family request' : 'New family request', `${child.profile.full_name}: ${message}`, requestId);
+        urgent ? 'Urgent family request' : 'New family request', `${child.profile.full_name}: ${message}`, requestId, userId);
     });
+  },
+  async sendMessage(userId: string, childId: string, body: string, sender: FamilyMessage['sender'], draft?: AttachmentDraft) {
+    const attachment = draft && { id: randomUUID(), name: draft.name, mime: draft.mime };
+    let saved = false;
+    try {
+      await change(async data => {
+        const fromParent = sender === 'parent';
+        const from = requireAccount(data, userId, fromParent);
+        const parentId = data.links[childId];
+        if (!parentId || (fromParent ? parentId !== userId : childId !== userId)) {
+          throw new Error('Choose a connected family member.');
+        }
+        const message = body.trim();
+        if ((!message && !attachment) || message.length > 500) throw new Error('Enter a message or add an attachment.');
+        if (attachment && draft) {
+          await AsyncStorage.setItem(attachmentKey(attachment.id), draft.base64);
+          saved = true;
+        }
+        (data.messages ??= []).push({ id: id(data), parent_id: parentId, child_id: childId, sender, body: message, attachment, created_at: now() });
+        if (!fromParent) {
+          notify(data, parentId, 'message', 'New message', `${from.profile.full_name}: ${message || attachment?.name}`, null, childId);
+        }
+      });
+    } catch (error) {
+      if (saved && attachment) await AsyncStorage.removeItem(attachmentKey(attachment.id)).catch(() => {});
+      throw error;
+    }
   },
   answer(userId: string, requestId: string, status: 'acknowledged' | 'done') {
     return change(data => {
@@ -206,15 +236,20 @@ export const localStore = {
       }
     });
   },
-  saveTask(userId: string, title: string, taskId?: string) {
+  saveTask(userId: string, title: string, taskId?: string, dueDate?: string | null) {
     return change(data => {
       requireAccount(data, userId, true);
       const clean = title.trim();
       if (!clean || clean.length > 120) throw new Error('Enter a task name between 1 and 120 characters.');
+      if (dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || localDate(Date.parse(dueDate + 'T12:00:00')) !== dueDate)) {
+        throw new Error('Enter a valid due date in YYYY-MM-DD format.');
+      }
       if (taskId) {
-        findTask(data, userId, taskId).title = clean;
+        const task = findTask(data, userId, taskId);
+        task.title = clean;
+        if (dueDate !== undefined) task.due_date = dueDate;
       } else {
-        data.tasks.unshift({ id: id(data), user_id: userId, title: clean, completed: false, completed_at: null, created_at: now() });
+        data.tasks.unshift({ id: id(data), user_id: userId, title: clean, due_date: dueDate, completed: false, completed_at: null, created_at: now() });
       }
     });
   },
@@ -248,6 +283,25 @@ export const localStore = {
       profile.available_at = end;
     });
   },
+  setFocusPaused(userId: string, paused: boolean) {
+    return change(data => {
+      const { profile } = requireAccount(data, userId, true);
+      const at = now();
+      const session = activeSession(data.sessions.filter(row => row.user_id === userId), Date.parse(at));
+      if (!session) throw new Error('There is no current focus session.');
+      const pause = currentPause(session);
+      if (paused && !pause) {
+        (session.pauses ??= []).push({ started_at: at, ended_at: null });
+        profile.focus_status = 'break';
+        profile.available_at = null;
+      } else if (!paused && pause) {
+        pause.ended_at = at;
+        session.planned_end = new Date(Date.parse(session.planned_end) + Date.parse(at) - Date.parse(pause.started_at)).toISOString();
+        profile.focus_status = 'focusing';
+        profile.available_at = session.planned_end;
+      }
+    });
+  },
   endFocus(userId: string, status: 'available' | 'break') {
     return change(data => {
       const { profile } = requireAccount(data, userId, true);
@@ -260,5 +314,8 @@ export const localStore = {
 
 function closeFocus(data: LocalData, userId: string, endedAt: string) {
   const session = data.sessions.find(row => row.user_id === userId && !row.ended_at);
-  if (session) session.ended_at = session.planned_end < endedAt ? session.planned_end : endedAt;
+  if (!session) return;
+  const pause = currentPause(session);
+  if (pause) pause.ended_at = endedAt;
+  session.ended_at = pause || endedAt < session.planned_end ? endedAt : session.planned_end;
 }
