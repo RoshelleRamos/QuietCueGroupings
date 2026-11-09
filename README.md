@@ -12,7 +12,9 @@ For Expo Go, run `npm start -- --go` from `mobile` and scan the QR code
 with an SDK 58 compatible version of Expo Go.
 
 From the splash screen, choose **Sign Up** to create an account with a name,
-email, password, and role. Use that email and password to sign back in.
+email, password, and role. The app remembers your sign-in on this device. To
+try a different account, log out from **Profile** and log in with its email
+and password.
 
 In a Parent account, open **Tasks** to add, edit, complete, or delete a task.
 Open **Family** to copy the family code, then log out from **Profile**.
@@ -20,7 +22,7 @@ Create a Child account with a different email in the same browser or app
 installation. Enter the code under **Profile**, then send a request.
 Switch back to Parent to see it under **Inbox** and **Notifications**.
 Open a request to mark it seen or done, send a reply, or attach a photo or PDF
-up to 1 MB. Child replies are available under **History → Messages with my parent**.
+up to 1 MB. Children can reply under **Messages** and check request status under **My requests**.
 
 Add an optional due date to show a task under **Upcoming**. The focus timer can
 pause, resume, stop, or skip to a break.
