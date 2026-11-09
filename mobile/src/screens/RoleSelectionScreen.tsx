@@ -6,10 +6,10 @@ import {
   ImageBackground,
   StyleSheet,
   Pressable,
-  Alert,
 } from "react-native";
 
-type Role = "parent" | "family" | "child";
+import type { Role } from "../lib/demo";
+import { showAlert } from "../lib/show-alert";
 
 type Props = {
   onBack: () => void;
@@ -27,7 +27,7 @@ export default function RoleSelectionScreen({
   const handleContinue = () => {
     if (busy) return;
     if (!selectedRole) {
-      Alert.alert("QuietCue", "Please select your role.");
+      showAlert("QuietCue", "Please select your role.");
       return;
     }
 

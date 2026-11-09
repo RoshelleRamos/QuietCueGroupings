@@ -19,12 +19,12 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single"
     },
     "plugins": [
       "expo-status-bar",
-      "expo-router",
-      "expo-notifications"
+      "expo-router"
     ],
     "scheme": "quietcue"
   }

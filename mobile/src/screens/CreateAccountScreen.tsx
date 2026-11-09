@@ -8,12 +8,12 @@ import {
   ImageBackground,
   ScrollView,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 
-import type { Registration } from "../lib/api";
+import type { Registration } from "../lib/demo";
+import { showAlert } from "../lib/show-alert";
 
 type Props = {
   onBack: () => void;
@@ -26,31 +26,23 @@ export default function CreateAccountScreen({
 }: Props) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleCreateAccount = () => {
-    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-      Alert.alert("Missing Information", "Please complete all fields.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert("Password Mismatch", "Passwords do not match.");
+    if (!fullName.trim() || !email.trim()) {
+      showAlert("Missing Information", "Please complete all fields.");
       return;
     }
 
     if (!acceptedTerms) {
-      Alert.alert("Terms and Conditions", "Please accept the terms.");
+      showAlert("Terms and Conditions", "Please accept the terms.");
       return;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      Alert.alert("Invalid Email", `Please check the email entered: “${email.trim()}”. Example: name@gmail.com`); return;
+      showAlert("Invalid Email", `Please check the email entered: “${email.trim()}”. Example: name@gmail.com`); return;
     }
-    if (password.length < 8) { Alert.alert("Password Too Short", "Use at least 8 characters."); return; }
-    onContinue({ fullName: fullName.trim(), email: email.trim().toLowerCase(), password });
+    onContinue({ fullName: fullName.trim(), email: email.trim().toLowerCase() });
   };
 
   return (
@@ -76,7 +68,8 @@ export default function CreateAccountScreen({
             />
             </View>
 
-            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.title}>Create Demo Profile</Text>
+            <Text style={styles.termsText}>Use a sample name and email. This profile stays on this device.</Text>
 
             <TextInput
               style={styles.input}
@@ -98,24 +91,6 @@ export default function CreateAccountScreen({
               onChangeText={setEmail}
             />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#A58A96"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm your password"
-              placeholderTextColor="#A58A96"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-
             <Pressable
               style={styles.termsRow}
               onPress={() => setAcceptedTerms(!acceptedTerms)}
@@ -132,7 +107,7 @@ export default function CreateAccountScreen({
               style={styles.createButton}
               onPress={handleCreateAccount}
             >
-              <Text style={styles.createText}>Create Account</Text>
+              <Text style={styles.createText}>Create Demo Profile</Text>
             </Pressable>
 
             <Pressable onPress={onBack} style={styles.backButton}>

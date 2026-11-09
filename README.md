@@ -1,75 +1,34 @@
-# QuietCue — local PostgreSQL
+# QuietCue frontend prototype
 
-This working copy uses an Expo app in `mobile/` and a Node API in `backend/`.
-The app calls the API; only the API holds the PostgreSQL password.
-Login, registration, family codes, requests, tasks, focus sessions and notifications
-use PostgreSQL. The active app refreshes family updates every seven seconds.
+QuietCue is an Expo prototype. Install Node.js 22 or newer, then run:
 
-## Start on this Windows PC
-
-Requires Node.js 22 or newer. Open PowerShell in this folder:
-
-```powershell
-./setup-local.ps1
-./start-local.ps1
+```sh
+cd mobile
+npm ci
+npm run web
 ```
 
-Setup downloads the official PostgreSQL 18 Windows binaries into `.local/`,
-initializes a password-protected database on `127.0.0.1:54329`, writes private
-credentials to `backend/.env`, and applies `backend/schema.sql`. It can be rerun
-without clearing records. PostgreSQL runs as a local process, not a Windows service.
-The runtime and credentials are ignored by Git.
+From the splash screen, open **Demo Login** and enter one of these sample emails:
 
-Press `w` in the Expo terminal for the browser. For Expo Go on a physical phone,
-put the PC's LAN address into `mobile/.env`, for example:
+- **Parent** · `parent@example.com`
+- **Child** · `child@example.com`
 
-```dotenv
-EXPO_PUBLIC_API_URL=http://192.168.1.10:3001
-```
+In the Parent profile, open **Tasks** to add, edit, complete, or delete a task.
+Open **Family** to copy the demo family code, then log out from **Profile**.
+Open the Child profile in the same browser, enter the code under **Profile**,
+and send a sample request. Switch back to Parent to see it under **Family**
+and **Notifications**.
 
-Restart Expo after changing this setting. Connect the phone to the same network.
-For an Android emulator use `http://10.0.2.2:3001`; for the PC browser use
-`http://localhost:3001`. The API listens on port 3001; the database stays on loopback.
+Demo profiles and changes are stored in the current browser or app installation.
+Sign-up creates a local demo profile using a sample name and email.
 
-## Stop
+## Checks and static build
 
-Stop Expo with Ctrl+C, then stop the API and database:
-
-```powershell
-./stop-local.ps1
-```
-
-## Existing Supabase records
-
-The original project and Supabase database have not been modified. This is a fresh
-local database: create a parent and child account and join with the parent's code.
-Existing Supabase users, passwords and app records have not been imported.
-The old SQL under `mobile/supabase/` is reference material only and is not executed.
-
-## Other PostgreSQL installations
-
-Use a dedicated empty database and a migration account that can create roles.
-Copy `backend/.env.example` to `backend/.env` and set `DATABASE_URL`.
-Run `npm ci`, `npm run migrate`, then `npm start` from `backend/`.
-Run `npm ci` and `npm start` from `mobile/` with its API URL configured.
-The optional `compose.yaml` provides PostgreSQL on port 5432 when Docker is installed;
-copy the root `.env.example` to `.env`, choose a password, and run `docker compose up -d`.
-
-## Validation
-
-```powershell
-cd backend
-npm test
-cd ../mobile
-npx tsc --noEmit
+```sh
 npm run lint
+npx tsc --noEmit
+npx expo export --platform web
 ```
 
-Tests cover authentication over HTTP, family isolation, database policies, requests,
-notifications, tasks, focus sessions and parameterized queries. Automated database
-tests use PGlite; the local server uses PostgreSQL through `pg`.
-Run `npm run test:live` from `backend/` to repeat the HTTP test against the configured
-PostgreSQL database. Temporary test accounts are removed afterward.
-
-References: [PostgreSQL Windows downloads](https://www.postgresql.org/download/windows/),
-[EDB Windows binaries](https://www.enterprisedb.com/download-postgresql-binaries).
+Serve the generated `mobile/dist/` folder with a static host. Configure the host
+to serve `index.html` for app routes such as `/parent/tasks`.
