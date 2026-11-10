@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   Alert,
   AppState,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -25,6 +26,7 @@ type FocusData = {
   isRunning: boolean;
   lastUpdated: number;
   totalSeconds: number;
+  completedSessions: number;
   date: string;
 };
 
@@ -42,9 +44,9 @@ const createInitialData = (): FocusData => ({
   isRunning: false,
   lastUpdated: Date.now(),
   totalSeconds: 0,
+  completedSessions: 0,
   date: getLocalDate(),
 });
-
 function synchronizeTimer(
   data: FocusData,
   now = Date.now()
@@ -56,6 +58,11 @@ function synchronizeTimer(
 
   const countedSeconds = Math.min(elapsed, data.secondsLeft);
 
+  const sessionCompleted =
+  data.isRunning &&
+  data.secondsLeft > 0 &&
+  elapsed >= data.secondsLeft;
+
   return {
     secondsLeft: Math.max(0, data.secondsLeft - countedSeconds),
     isRunning: data.isRunning && data.secondsLeft > elapsed,
@@ -63,10 +70,13 @@ function synchronizeTimer(
       ? data.lastUpdated + elapsed * 1000
       : now,
     totalSeconds:
-      (data.date === today ? data.totalSeconds : 0) +
-      countedSeconds,
+    (data.date === today ? data.totalSeconds : 0) +
+    countedSeconds,
+    completedSessions:
+    (data.date === today ? (data.completedSessions ?? 0) : 0) +
+    (sessionCompleted ? 1 : 0),
     date: today,
-  };
+    };
 }
 
 export default function ParentFocusScreen({
@@ -195,7 +205,7 @@ export default function ParentFocusScreen({
     );
   };
 
-  const circleSize = 230;
+  const circleSize = 190;
 const strokeWidth = 12;
 const radius = (circleSize - strokeWidth) / 2;
 const circumference = 2 * Math.PI * radius;
@@ -213,6 +223,16 @@ const strokeDashoffset = circumference * (1 - progress);
   const formattedTime = `${String(minutes).padStart(2, "0")}:${String(
     seconds
   ).padStart(2, "0")}`;
+
+  const DAILY_GOAL_SECONDS = 2 * 60 * 60;
+
+const dailyProgress = Math.min(
+  100,
+  Math.max(0, (focus.totalSeconds / DAILY_GOAL_SECONDS) * 100)
+);
+
+const dailyMinutes = Math.floor(focus.totalSeconds / 60);
+const dailyGoalMinutes = 120;
 
   const totalHours = Math.floor(focus.totalSeconds / 3600);
   const totalMinutes = Math.floor(
@@ -234,7 +254,11 @@ const strokeDashoffset = circumference * (1 - progress);
         />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        >
         <Text style={styles.sectionTitle}>Current Session</Text>
 
         <View style={styles.sessionCard}>
@@ -299,6 +323,31 @@ const strokeDashoffset = circumference * (1 - progress);
           </Text>
           <Text style={styles.totalTime}>{formattedTotal}</Text>
 
+          <Text style={styles.completedText}>
+            Completed Sessions: {focus.completedSessions ?? 0}
+            </Text>
+
+            <View style={styles.dailyGoalContainer}>
+  <Text style={styles.dailyGoalTitle}>Daily Focus Goal</Text>
+
+  <Text style={styles.dailyGoalSubtitle}>
+    {dailyMinutes} / {dailyGoalMinutes} minutes
+  </Text>
+
+  <View style={styles.dailyProgressBackground}>
+    <View
+      style={[
+        styles.dailyProgressFill,
+        { width: `${dailyProgress}%` },
+      ]}
+    />
+  </View>
+
+  <Text style={styles.dailyGoalPercentage}>
+    {Math.round(dailyProgress)}% Completed
+  </Text>
+</View>
+
           <View style={styles.buttonRow}>
             <Pressable
               style={styles.stopButton}
@@ -338,7 +387,7 @@ const strokeDashoffset = circumference * (1 - progress);
             </Pressable>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* BOTTOM NAVIGATION */}
       <View style={styles.bottomBar}>
@@ -413,24 +462,32 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
   },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
+ content: {
+  flex: 1,
+},
+
+scrollContent: {
+  paddingHorizontal: 16,
+  paddingTop: 14,
+  paddingBottom: 25,
+},
+
   sectionTitle: {
-    fontSize: 21,
-    fontWeight: "700",
-    color: "#49303C",
-    marginBottom: 20,
-  },
-  sessionCard: {
-    backgroundColor: "#FFE4EC",
-    borderRadius: 22,
-    padding: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#F38DB2",
-  },
+  fontSize: 19,
+  fontWeight: "700",
+  color: "#49303C",
+  marginBottom: 12,
+},
+
+sessionCard: {
+  backgroundColor: "#FFE4EC",
+  borderRadius: 22,
+  padding: 14,
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: "#F38DB2",
+},
+
   sessionName: {
     fontSize: 19,
     fontWeight: "700",
@@ -442,14 +499,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
   },
-  timerCircle: {
-  width: 230,
-  height: 230,
-  borderRadius: 115,
+timerCircle: {
+  width: 190,
+  height: 190,
+  borderRadius: 95,
   backgroundColor: "#FFF8FB",
   justifyContent: "center",
   alignItems: "center",
-  marginVertical: 25,
+  marginVertical: 14,
 },
   timerText: {
     fontSize: 43,
@@ -466,13 +523,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#775465",
   },
-  totalTime: {
-    fontSize: 25,
-    fontWeight: "700",
-    color: "#B53166",
-    marginTop: 6,
-    marginBottom: 25,
-  },
+totalTime: {
+  fontSize: 23,
+  fontWeight: "700",
+  color: "#B53166",
+  marginTop: 4,
+  marginBottom: 12,
+}, 
   buttonRow: {
     flexDirection: "row",
     gap: 10,
@@ -537,4 +594,51 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 4,
   },
+
+  completedText: {
+  fontSize: 14,
+  fontWeight: "600",
+  color: "#B53166",
+  textAlign: "center",
+  marginBottom: 18,
+},
+
+dailyGoalContainer: {
+  width: "100%",
+  backgroundColor: "#FFF8FB",
+  borderRadius: 14,
+  padding: 14,
+  marginTop: 4,
+},
+dailyGoalTitle: {
+  fontSize: 14,
+  fontWeight: "700",
+  color: "#B53166",
+  textAlign: "center",
+},
+dailyGoalSubtitle: {
+  fontSize: 12,
+  color: "#775465",
+  textAlign: "center",
+  marginTop: 7,
+  marginBottom: 12,
+},
+dailyProgressBackground: {
+  height: 10,
+  backgroundColor: "#F4B7CD",
+  borderRadius: 10,
+  overflow: "hidden",
+},
+dailyProgressFill: {
+  height: "100%",
+  backgroundColor: "#B53166",
+  borderRadius: 10,
+},
+dailyGoalPercentage: {
+  fontSize: 12,
+  fontWeight: "600",
+  color: "#B53166",
+  textAlign: "center",
+  marginTop: 9,
+},
 });
