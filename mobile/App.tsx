@@ -26,10 +26,44 @@ type Screen =
 type Role = "parent" | "family" | "child";
 const SESSION_KEY = "@quietcue_dev_session";
 
+const SELECTED_FOCUS_TASK_KEY = "@quietcue_selected_focus_task";
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("splash");
 
+  const [selectedFocusTask, setSelectedFocusTask] = useState<{
+  id: number;
+  title: string;
+} | null>(null);
+
+useEffect(() => {
+  const loadSelectedFocusTask = async () => {
+    try {
+      const savedTask = await AsyncStorage.getItem(
+        SELECTED_FOCUS_TASK_KEY
+      );
+
+      if (savedTask) {
+        const parsedTask = JSON.parse(savedTask);
+
+        if (
+          typeof parsedTask.id === "number" &&
+          typeof parsedTask.title === "string"
+        ) {
+          setSelectedFocusTask(parsedTask);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load selected focus task:", error);
+    }
+  };
+
+  loadSelectedFocusTask();
+}, []);
+
   const [checkingSession, setCheckingSession] = useState(true);
+
+  
 
 useEffect(() => {
   const checkSession = async () => {
@@ -152,8 +186,39 @@ if (screen === "loading") {
         <>
           <StatusBar style="dark" />
           <ParentTasksScreen
-            onBack={() => setScreen("parentHome")}
-          />
+          onBack={() => setScreen("parentHome")}
+          onFocusPress={async (taskId, taskTitle) => {
+  const selectedTask = {
+    id: taskId,
+    title: taskTitle,
+  };
+
+  setSelectedFocusTask(selectedTask);
+
+  try {
+    await AsyncStorage.setItem(
+      SELECTED_FOCUS_TASK_KEY,
+      JSON.stringify(selectedTask)
+    );
+  } catch (error) {
+    console.error("Failed to save selected focus task:", error);
+  }
+
+  setScreen("parentFocus");
+}}
+
+onTaskDeleted={async (taskId) => {
+  if (selectedFocusTask?.id === taskId) {
+    setSelectedFocusTask(null);
+
+    try {
+      await AsyncStorage.removeItem(SELECTED_FOCUS_TASK_KEY);
+    } catch (error) {
+      console.error("Failed to clear selected focus task:", error);
+    }
+  }
+}}
+        />
         </>
       );
     }
@@ -166,6 +231,7 @@ if (screen === "parentFocus") {
       <ParentFocusScreen
         onHomePress={() => setScreen("parentHome")}
         onTasksPress={() => setScreen("parentTasks")}
+        selectedTaskTitle={selectedFocusTask?.title ?? null}
       />
     </>
   );

@@ -19,6 +19,7 @@ const STORAGE_KEY = "@quietcue_parent_focus_v1";
 type Props = {
   onHomePress: () => void;
   onTasksPress: () => void;
+  selectedTaskTitle?: string | null;
 };
 
 type FocusData = {
@@ -82,9 +83,12 @@ function synchronizeTimer(
 export default function ParentFocusScreen({
   onHomePress,
   onTasksPress,
+  selectedTaskTitle,
 }: Props) {
   const [focus, setFocus] = useState<FocusData>(createInitialData);
   const [isLoaded, setIsLoaded] = useState(false);
+  const completionAlertShown = React.useRef(false);
+const previousSecondsLeft = React.useRef<number | null>(null);
 
   const loadFocus = useCallback(async () => {
     try {
@@ -144,7 +148,36 @@ export default function ParentFocusScreen({
     if (!isLoaded) return;
 
     saveFocus(focus);
+
+    
   }, [focus, isLoaded]);
+useEffect(() => {
+  if (!isLoaded) return;
+
+  const previous = previousSecondsLeft.current;
+  const current = focus.secondsLeft;
+
+  if (
+    previous !== null &&
+    previous > 0 &&
+    current === 0 &&
+    !completionAlertShown.current
+  ) {
+    completionAlertShown.current = true;
+
+    Alert.alert(
+      "Focus Session Complete! 🎉",
+      "Great job! You've completed your 30-minute focus session. Keep up the good work!",
+      [{ text: "OK" }]
+    );
+  }
+
+  if (current === FOCUS_DURATION) {
+    completionAlertShown.current = false;
+  }
+
+  previousSecondsLeft.current = current;
+}, [focus.secondsLeft, isLoaded]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -157,6 +190,8 @@ export default function ParentFocusScreen({
         }
       }
     );
+
+    
 
     return () => subscription.remove();
   }, [isLoaded]);
@@ -191,19 +226,43 @@ export default function ParentFocusScreen({
     });
   };
 
-  const handleSkip = () => {
+   const confirmStop = () => {
     Alert.alert(
-      "Skip Session",
-      "Do you want to skip the current session?",
+      "Stop Focus Session",
+      "Are you sure you want to stop your current focus session?",
       [
-        { text: "Cancel", style: "cancel" },
         {
-          text: "Skip",
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Stop Session",
+          style: "destructive",
           onPress: handleStop,
         },
       ]
     );
   };
+
+  const handleSkip = () => {
+  Alert.alert(
+    "Skip Focus Session",
+    "Do you want to skip this session and choose another task?",
+    [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Skip Session",
+        onPress: () => {
+          handleStop();
+          onTasksPress();
+        },
+      },
+    ]
+  );
+};
 
   const circleSize = 190;
 const strokeWidth = 12;
@@ -262,7 +321,15 @@ const dailyGoalMinutes = 120;
         <Text style={styles.sectionTitle}>Current Session</Text>
 
         <View style={styles.sessionCard}>
-          <Text style={styles.sessionName}>Office Hours</Text>
+
+          <Text style={styles.selectedTaskLabel}>
+            {selectedTaskTitle ? "FOCUSING ON TASK" : "GENERAL FOCUS SESSION"}
+          </Text>
+
+          <Text style={styles.sessionName}>
+            {selectedTaskTitle || "Office Hours"}
+          </Text>
+          
           <Text style={styles.sessionDescription}>
             Stay focused and make every minute count.
           </Text>
@@ -307,6 +374,24 @@ const dailyGoalMinutes = 120;
     {isLoaded ? formattedTime : "--:--"}
   </Text>
 
+<View style={styles.focusStatusRow}>
+  <View
+    style={[
+      styles.focusStatusDot,
+      {
+        backgroundColor: !isLoaded
+          ? "#999999"
+          : focus.isRunning
+          ? "#28A745"
+          : focus.secondsLeft === 0
+          ? "#28A745"
+          : focus.secondsLeft < FOCUS_DURATION
+          ? "#E5A100"
+          : "#B53166",
+      },
+    ]}
+  />
+
   <Text style={styles.timerLabel}>
     {!isLoaded
       ? "Loading..."
@@ -314,8 +399,12 @@ const dailyGoalMinutes = 120;
       ? "Focusing..."
       : focus.secondsLeft === 0
       ? "Session Complete"
+      : focus.secondsLeft < FOCUS_DURATION
+      ? "Paused"
       : "Ready to Focus"}
   </Text>
+</View>
+
 </View>
 
           <Text style={styles.totalLabel}>
@@ -351,7 +440,7 @@ const dailyGoalMinutes = 120;
           <View style={styles.buttonRow}>
             <Pressable
               style={styles.stopButton}
-              onPress={handleStop}
+              onPress={confirmStop}
               disabled={!isLoaded}
             >
               <Ionicons name="stop" size={20} color="#FFFFFF" />
@@ -369,7 +458,13 @@ const dailyGoalMinutes = 120;
                 color="#FFFFFF"
               />
               <Text style={styles.buttonText}>
-                {focus.isRunning ? "Pause" : "Start"}
+                {focus.isRunning
+                  ? "Pause"
+                  : focus.secondsLeft === 0
+                    ? "Start New Session"
+                    : focus.secondsLeft < FOCUS_DURATION
+                      ? "Resume"
+                      : "Start"}
               </Text>
             </Pressable>
 
@@ -488,6 +583,15 @@ sessionCard: {
   borderColor: "#F38DB2",
 },
 
+selectedTaskLabel: {
+  fontSize: 10,
+  fontWeight: "700",
+  color: "#775465",
+  letterSpacing: 1,
+  marginBottom: 6,
+  textAlign: "center",
+},
+
   sessionName: {
     fontSize: 19,
     fontWeight: "700",
@@ -514,6 +618,20 @@ timerCircle: {
     color: "#B53166",
     marginTop: 8,
   },
+
+  focusStatusRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+},
+
+focusStatusDot: {
+  width: 8,
+  height: 8,
+  borderRadius: 4,
+},
+
   timerLabel: {
     fontSize: 13,
     color: "#775465",

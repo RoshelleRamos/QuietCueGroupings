@@ -16,9 +16,16 @@ const TASKS_STORAGE_KEY = "@quietcue_parent_tasks";
 
 type Props = {
   onBack: () => void;
+  onFocusPress: (taskId: number, taskTitle: string) => void;
+  onTaskDeleted: (taskId: number) => void;
 };
 
-export default function ParentTasksScreen({ onBack }: Props) {
+export default function ParentTasksScreen({
+  onBack,
+  onFocusPress,
+  onTaskDeleted,
+}: Props) {
+
 const [tasks, setTasks] = useState([
   { id: 1, title: "Project for AppDev", completed: false },
   { id: 2, title: "Client layout", completed: true },
@@ -53,6 +60,12 @@ const handleAddTask = () => {
 };
 
 const handleToggleTask = (taskId: number) => {
+  const taskToToggle = tasks.find((task) => task.id === taskId);
+
+  if (!taskToToggle) return;
+
+  const willBeCompleted = !taskToToggle.completed;
+
   setTasks((currentTasks) =>
     currentTasks.map((task) =>
       task.id === taskId
@@ -60,6 +73,10 @@ const handleToggleTask = (taskId: number) => {
         : task
     )
   );
+
+  if (willBeCompleted) {
+    onTaskDeleted(taskId);
+  }
 };
 
 const handleDeleteTask = (taskId: number) => {
@@ -78,6 +95,8 @@ const handleDeleteTask = (taskId: number) => {
           setTasks((currentTasks) =>
             currentTasks.filter((task) => task.id !== taskId)
           );
+
+          onTaskDeleted(taskId);
         },
       },
     ]
@@ -290,6 +309,39 @@ useEffect(() => {
               {task.completed ? "Done" : "Pending"}
             </Text>
 
+            {!task.completed && (
+  <Pressable
+    style={styles.startFocusButton}
+    onPress={(event) => {
+  event.stopPropagation();
+
+  Alert.alert(
+    "Start Focus Session?",
+    `Would you like to focus on "${task.title}" for 30 minutes?`,
+    [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Continue",
+        onPress: () => onFocusPress(task.id, task.title),
+      },
+    ]
+  );
+}}
+    accessibilityRole="button"
+    accessibilityLabel={`Start focus for ${task.title}`}
+  >
+    <Ionicons
+      name="timer-outline"
+      size={15}
+      color="#FFFFFF"
+    />
+    <Text style={styles.startFocusText}>Focus</Text>
+  </Pressable>
+)}
+
             <Pressable
             style={styles.deleteButton}
             onPress={(event) => {
@@ -477,6 +529,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
+
+  startFocusButton: {
+  backgroundColor: "#B53166",
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  borderRadius: 10,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 4,
+},
+
+startFocusText: {
+  color: "#FFFFFF",
+  fontSize: 11,
+  fontWeight: "700",
+},
 
   deleteButton: {
   padding: 7,
