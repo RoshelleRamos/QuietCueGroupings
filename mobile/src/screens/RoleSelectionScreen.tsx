@@ -6,28 +6,25 @@ import {
   ImageBackground,
   StyleSheet,
   Pressable,
+  Alert,
 } from "react-native";
 
-import type { Role } from "../lib/local-store";
-import { showAlert } from "../lib/show-alert";
+type Role = "parent" | "family" | "child";
 
 type Props = {
   onBack: () => void;
   onContinue: (role: Role) => void;
-  busy?: boolean;
 };
 
 export default function RoleSelectionScreen({
   onBack,
   onContinue,
-  busy = false,
 }: Props) {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   const handleContinue = () => {
-    if (busy) return;
     if (!selectedRole) {
-      showAlert("QuietCue", "Please select your role.");
+      Alert.alert("QuietCue", "Please select your role.");
       return;
     }
 
@@ -96,7 +93,7 @@ export default function RoleSelectionScreen({
               !selectedRole && styles.disabledButton,
             ]}
             onPress={handleContinue}
-            disabled={!selectedRole || busy}
+            disabled={!selectedRole}
           >
             <Text
               style={[
@@ -104,12 +101,12 @@ export default function RoleSelectionScreen({
                 !selectedRole && styles.disabledText,
               ]}
             >
-              {busy ? "Creating account…" : "Create Account"}
+              Continue
             </Text>
           </Pressable>
 
           {/* BACK BUTTON */}
-          <Pressable disabled={busy} onPress={onBack} style={styles.backButton}>
+          <Pressable onPress={onBack} style={styles.backButton}>
             <Text style={styles.backText}>Back</Text>
           </Pressable>
         </View>

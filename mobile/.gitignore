@@ -39,9 +39,3 @@ yarn-error.*
 # generated native folders
 /ios
 /android
-
-# Local dashboard verification
-.dashboard-check/
-.child-lint.json
-
-.parent-lint.json
