@@ -1,258 +1,53 @@
-import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActivityIndicator, View } from "react-native";
+import { Redirect } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import SplashScreen from "./src/screens/SplashScreen";
-import LoginScreen from "./src/screens/LoginScreen";
-import CreateAccountScreen from "./src/screens/CreateAccountScreen";
-import RoleSelectionScreen from "./src/screens/RoleSelectionScreen";
-import LoadingScreen from "./src/screens/LoadingScreen";
-import ParentHomeScreen from "./src/screens/ParentHomeScreen";
-import ParentTasksScreen from "./src/screens/ParentTasksScreen";
-import ParentFocusScreen from "./src/screens/ParentFocusScreen";
-
-type Screen =
-  | "splash"
-  | "login"
-  | "register"
-  | "role"
-  | "loading"
-  | "parentHome"
-  | "parentTasks"
-  | "parentFocus";
-
-type Role = "parent" | "family" | "child";
-const SESSION_KEY = "@quietcue_dev_session";
-
-const SELECTED_FOCUS_TASK_KEY = "@quietcue_selected_focus_task";
+import { localStore, type Registration, type Role } from './src/lib/local-store';
+import { errorMessage } from './src/lib/family';
+import { showAlert } from './src/lib/show-alert';
+import SplashScreen from './src/screens/SplashScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import CreateAccountScreen from './src/screens/CreateAccountScreen';
+import RoleSelectionScreen from './src/screens/RoleSelectionScreen';
+import { useParent } from './src/state/ParentProvider';
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("splash");
+  const { user, loading } = useParent();
+  const [screen, setScreen] = useState<'splash' | 'login' | 'register' | 'role'>('splash');
+  const [registration, setRegistration] = useState<Registration | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
 
-  const [selectedFocusTask, setSelectedFocusTask] = useState<{
-  id: number;
-  title: string;
-} | null>(null);
-
-useEffect(() => {
-  const loadSelectedFocusTask = async () => {
+  const createAccount = async (role: Role) => {
+    if (!registration || submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
     try {
-      const savedTask = await AsyncStorage.getItem(
-        SELECTED_FOCUS_TASK_KEY
-      );
-
-      if (savedTask) {
-        const parsedTask = JSON.parse(savedTask);
-
-        if (
-          typeof parsedTask.id === "number" &&
-          typeof parsedTask.title === "string"
-        ) {
-          setSelectedFocusTask(parsedTask);
-        }
-      }
+      await localStore.signUp(registration, role);
+      setRegistration(null);
+      setScreen('login');
     } catch (error) {
-      console.error("Failed to load selected focus task:", error);
-    }
-  };
-
-  loadSelectedFocusTask();
-}, []);
-
-  const [checkingSession, setCheckingSession] = useState(true);
-
-  
-
-useEffect(() => {
-  const checkSession = async () => {
-    try {
-      const savedSession = await AsyncStorage.getItem(SESSION_KEY);
-
-      if (savedSession === "parent") {
-        setScreen("parentHome");
-      }
-    } catch (error) {
-      console.error("Failed to check session:", error);
+      showAlert('Could not create account', errorMessage(error));
     } finally {
-      setCheckingSession(false);
+      submitting.current = false;
+      setBusy(false);
     }
   };
 
-  checkSession();
-}, []);
-
-  const hasContinued = useRef(false);
-
-  const handleSplashContinue = () => {
-    if (hasContinued.current) return;
-
-    hasContinued.current = true;
-    setScreen("login");
-  };
-
-  if (checkingSession) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "#FFF8FB",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <ActivityIndicator size="large" color="#D45A88" />
-    </View>
-  );
-}
-
-  // SPLASH SCREEN
-  if (screen === "splash") {
-    return <SplashScreen onContinue={handleSplashContinue} />;
-  }
-
-  // CREATE ACCOUNT SCREEN
-  if (screen === "register") {
-    return (
-      <CreateAccountScreen
-        onBack={() => setScreen("login")}
-        onContinue={() => setScreen("role")}
-      />
-    );
-  }
-
-  // ROLE SELECTION SCREEN
-  if (screen === "role") {
-    return (
-      <RoleSelectionScreen
-        onBack={() => setScreen("register")}
-        onContinue={(role: Role) => {
-          if (role === "parent") {
-            setScreen("loading");
-          } else {
-            Alert.alert(
-              "QuietCue",
-              `${role} dashboard will be added next.`
-            );
-          }
-        }}
-      />
-    );
-  }
-
-  // LOADING SCREEN
-if (screen === "loading") {
-  return (
-    <LoadingScreen
-      onFinish={async () => {
-        try {
-          await AsyncStorage.setItem(SESSION_KEY, "parent");
-        } catch (error) {
-          console.error("Failed to save session:", error);
-        }
-
-        setScreen("parentHome");
-      }}
-    />
-  );
-}
-
-    // PARENT HOME DASHBOARD
-      if (screen === "parentHome") {
-        return (
-          <>
-            <StatusBar style="dark" />
-            <ParentHomeScreen
-                onTasksPress={() => setScreen("parentTasks")}
-                onFocusPress={() => setScreen("parentFocus")}
-                onLogout={async () => {
-                try {
-                  await AsyncStorage.removeItem(SESSION_KEY);
-                  setScreen("login");
-                } catch (error) {
-                  console.error("Logout failed:", error);
-                  Alert.alert("Error", "Unable to log out.");
-                }
-              }}
-            />
-          </>
-        );
-      }
-
-    // PARENT TASKS SCREEN
-    if (screen === "parentTasks") {
-      return (
-        <>
-          <StatusBar style="dark" />
-          <ParentTasksScreen
-          onBack={() => setScreen("parentHome")}
-          onFocusPress={async (taskId, taskTitle) => {
-  const selectedTask = {
-    id: taskId,
-    title: taskTitle,
-  };
-
-  setSelectedFocusTask(selectedTask);
-
-  try {
-    await AsyncStorage.setItem(
-      SELECTED_FOCUS_TASK_KEY,
-      JSON.stringify(selectedTask)
-    );
-  } catch (error) {
-    console.error("Failed to save selected focus task:", error);
-  }
-
-  setScreen("parentFocus");
-}}
-
-onTaskDeleted={async (taskId) => {
-  if (selectedFocusTask?.id === taskId) {
-    setSelectedFocusTask(null);
-
+  if (user) return <Redirect href={user.user_metadata.role === 'parent' ? '/parent/home' : '/child/home'} />;
+  if (loading) return <View style={styles.center}><ActivityIndicator color="#BE356C" size="large" /></View>;
+  if (screen === 'splash') return <SplashScreen onContinue={() => setScreen('login')} />;
+  if (screen === 'register') return <CreateAccountScreen onBack={() => setScreen('login')} onContinue={details => { setRegistration(details); setScreen('role'); }} />;
+  if (screen === 'role') return <RoleSelectionScreen busy={busy} onBack={() => { setRegistration(null); setScreen('register'); }} onContinue={createAccount} />;
+  return <LoginScreen onSignUp={() => setScreen('register')} onLogin={async (email, password) => {
     try {
-      await AsyncStorage.removeItem(SELECTED_FOCUS_TASK_KEY);
+      await localStore.signIn(email, password);
     } catch (error) {
-      console.error("Failed to clear selected focus task:", error);
+      showAlert('Could not log in', errorMessage(error));
     }
-  }
-}}
-        />
-        </>
-      );
-    }
-
-   // PARENT FOCUS SCREEN
-if (screen === "parentFocus") {
-  return (
-    <>
-      <StatusBar style="dark" />
-      <ParentFocusScreen
-        onHomePress={() => setScreen("parentHome")}
-        onTasksPress={() => setScreen("parentTasks")}
-        selectedTaskTitle={selectedFocusTask?.title ?? null}
-      />
-    </>
-  );
+  }} />;
 }
 
-    // LOGIN SCREEN
-    return (
-      <LoginScreen
-        onSignUp={() => setScreen("register")}
-        onLogin={async () => {
-          try {
-            await AsyncStorage.setItem(SESSION_KEY, "parent");
-            setScreen("parentHome");
-          } catch (error) {
-            console.error("Login failed:", error);
-            Alert.alert(
-              "Error",
-              "Unable to save your session. Please try again."
-            );
-          }
-        }}
-      />
-    );
-    }
+const styles = StyleSheet.create({
+  center: { flex: 1, backgroundColor: '#FFF8FB', justifyContent: 'center', alignItems: 'center' },
+});

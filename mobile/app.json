@@ -18,11 +18,15 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+     "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
     },
     "plugins": [
-      "expo-status-bar"
-    ]
+      "expo-status-bar",
+      "expo-router",
+      "expo-sharing"
+    ],
+    "scheme": "quietcue"
   }
 }

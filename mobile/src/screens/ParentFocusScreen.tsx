@@ -119,9 +119,13 @@ const previousSecondsLeft = React.useRef<number | null>(null);
     }
   }, []);
 
-  useEffect(() => {
-    loadFocus();
-  }, [loadFocus]);
+ useEffect(() => {
+  const timer = setTimeout(() => {
+    void loadFocus();
+  }, 0);
+
+  return () => clearTimeout(timer);
+}, [loadFocus]);
 
   const saveFocus = async (updated: FocusData) => {
     try {
@@ -408,8 +412,8 @@ const dailyGoalMinutes = 120;
 </View>
 
           <Text style={styles.totalLabel}>
-            Today's Total Focus Time
-          </Text>
+          Today&apos;s Total Focus Time
+        </Text>
           <Text style={styles.totalTime}>{formattedTotal}</Text>
 
           <Text style={styles.completedText}>
