@@ -8,17 +8,14 @@ import {
   ImageBackground,
   ScrollView,
   StyleSheet,
+  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 
-import { showAlert } from "../lib/show-alert";
-
-import type { Registration } from "../lib/local-store";
-
 type Props = {
   onBack: () => void;
-  onContinue: (details: Registration) => void;
+  onContinue: () => void;
 };
 
 export default function CreateAccountScreen({
@@ -33,25 +30,22 @@ export default function CreateAccountScreen({
 
   const handleCreateAccount = () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-      showAlert("Missing Information", "Please complete all fields.");
+      Alert.alert("Missing Information", "Please complete all fields.");
       return;
     }
 
     if (password !== confirmPassword) {
-      showAlert("Password Mismatch", "Passwords do not match.");
+      Alert.alert("Password Mismatch", "Passwords do not match.");
       return;
     }
 
     if (!acceptedTerms) {
-      showAlert("Terms and Conditions", "Please accept the terms.");
+      Alert.alert("Terms and Conditions", "Please accept the terms.");
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      showAlert("Invalid Email", `Please check the email entered: “${email.trim()}”. Example: name@gmail.com`); return;
-    }
-    if (password.length < 8) { showAlert("Password Too Short", "Use at least 8 characters."); return; }
-    onContinue({ fullName: fullName.trim(), email: email.trim().toLowerCase(), password });
+    // Static UI only. No account is created yet.
+    onContinue();
   };
 
   return (
@@ -78,7 +72,6 @@ export default function CreateAccountScreen({
             </View>
 
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.termsText}>Your account is saved on this device.</Text>
 
             <TextInput
               style={styles.input}
@@ -93,8 +86,6 @@ export default function CreateAccountScreen({
               placeholder="Enter your email"
               placeholderTextColor="#A58A96"
               autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="emailAddress"
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
@@ -105,7 +96,6 @@ export default function CreateAccountScreen({
               placeholder="Enter your password"
               placeholderTextColor="#A58A96"
               secureTextEntry
-              autoComplete="new-password"
               value={password}
               onChangeText={setPassword}
             />
@@ -115,7 +105,6 @@ export default function CreateAccountScreen({
               placeholder="Confirm your password"
               placeholderTextColor="#A58A96"
               secureTextEntry
-              autoComplete="new-password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
             />
