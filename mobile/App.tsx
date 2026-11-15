@@ -12,6 +12,13 @@ import LoadingScreen from "./src/screens/LoadingScreen";
 import ParentHomeScreen from "./src/screens/ParentHomeScreen";
 import ParentTasksScreen from "./src/screens/ParentTasksScreen";
 import ParentFocusScreen from "./src/screens/ParentFocusScreen";
+import ParentMessagesScreen from "./src/screens/ParentMessagesScreen";
+import ParentNotificationsScreen from "./src/screens/ParentNotificationsScreen";
+import ParentNotificationSettingsScreen from "./src/screens/ParentNotificationSettingsScreen";
+import ParentProfileScreen from "./src/screens/ParentProfileScreen";
+import ParentSettingsScreen from "./src/screens/ParentSettingsScreen";
+import AboutQuietCueScreen from "./src/screens/AboutQuietCueScreen";
+import ParentPrivacySecurityScreen from "./src/screens/ParentPrivacySecurityScreen";
 
 type Screen =
   | "splash"
@@ -21,15 +28,30 @@ type Screen =
   | "loading"
   | "parentHome"
   | "parentTasks"
-  | "parentFocus";
+  | "parentFocus"
+  | "parentMessages"
+  | "parentNotifications"
+  | "parentNotificationSettings"
+  | "parentProfile"
+  | "parentSettings"
+  | "aboutQuietCue"
+  | "parentPrivacySecurity";
 
 type Role = "parent" | "family" | "child";
 const SESSION_KEY = "@quietcue_dev_session";
+const DEMO_ACCOUNT_KEY = "@quietcue_demo_account_v1";
 
 const SELECTED_FOCUS_TASK_KEY = "@quietcue_selected_focus_task";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("splash");
+  const [pendingAccount, setPendingAccount] = useState<{
+  fullName: string;
+  email: string;
+} | null>(null);
+
+  const [notificationSettingsSource, setNotificationSettingsSource] =
+  useState<"parentHome" | "parentNotifications">("parentNotifications");
 
   const [selectedFocusTask, setSelectedFocusTask] = useState<{
   id: number;
@@ -117,7 +139,10 @@ useEffect(() => {
     return (
       <CreateAccountScreen
         onBack={() => setScreen("login")}
-        onContinue={() => setScreen("role")}
+        onContinue={(account) => {
+          setPendingAccount(account);
+          setScreen("role");
+        }}
       />
     );
   }
@@ -126,17 +151,47 @@ useEffect(() => {
   if (screen === "role") {
     return (
       <RoleSelectionScreen
-        onBack={() => setScreen("register")}
-        onContinue={(role: Role) => {
-          if (role === "parent") {
-            setScreen("loading");
-          } else {
-            Alert.alert(
-              "QuietCue",
-              `${role} dashboard will be added next.`
-            );
-          }
-        }}
+      onBack={() => setScreen("register")}
+       onContinue={async (role: Role) => {
+  if (role !== "parent") {
+    Alert.alert(
+      "QuietCue",
+      `${role} dashboard will be added next.`
+    );
+    return;
+  }
+
+  if (!pendingAccount) {
+    Alert.alert(
+      "Missing Account",
+      "Please complete the Create Account form first."
+    );
+    setScreen("register");
+    return;
+  }
+
+  try {
+    const demoAccount = {
+      fullName: pendingAccount.fullName,
+      email: pendingAccount.email,
+      role: role,
+    };
+
+    await AsyncStorage.setItem(
+      DEMO_ACCOUNT_KEY,
+      JSON.stringify(demoAccount)
+    );
+
+    setPendingAccount(null);
+    setScreen("loading");
+  } catch (error) {
+    console.error("Failed to save demo account:", error);
+    Alert.alert(
+      "Error",
+      "Unable to save your demo account."
+    );
+  }
+}}
       />
     );
   }
@@ -164,21 +219,74 @@ if (screen === "loading") {
           <>
             <StatusBar style="dark" />
             <ParentHomeScreen
-                onTasksPress={() => setScreen("parentTasks")}
-                onFocusPress={() => setScreen("parentFocus")}
-                onLogout={async () => {
-                try {
-                  await AsyncStorage.removeItem(SESSION_KEY);
-                  setScreen("login");
-                } catch (error) {
-                  console.error("Logout failed:", error);
-                  Alert.alert("Error", "Unable to log out.");
-                }
-              }}
-            />
+            onTasksPress={() => setScreen("parentTasks")}
+            onFocusPress={() => setScreen("parentFocus")}
+            onMessagesPress={() => setScreen("parentMessages")}
+            onNotificationsPress={() => setScreen("parentNotifications")}
+            onNotificationSettingsPress={() => {
+  setNotificationSettingsSource("parentHome");
+  setScreen("parentNotificationSettings");
+}}
+onProfilePress={() => setScreen("parentProfile")}
+onAppSettingsPress={() => setScreen("parentSettings")}
+
+onAboutPress={() => setScreen("aboutQuietCue")}
+onPrivacyPress={() => setScreen("parentPrivacySecurity")}
+
+onLogout={async () => {
+  try {
+    await AsyncStorage.removeItem(SESSION_KEY);
+    setScreen("login");
+  } catch (error) {
+    console.error("Logout failed:", error);
+    Alert.alert("Error", "Unable to log out.");
+  }
+}}
+
+/>
+                
           </>
         );
       }
+
+        // PARENT PROFILE SCREEN
+  if (screen === "parentProfile") {
+    return (
+      <ParentProfileScreen
+        onBack={() => setScreen("parentHome")}
+      />
+    );
+  }
+
+    // PARENT APP SETTINGS SCREEN
+if (screen === "parentSettings") {
+  return (
+    <ParentSettingsScreen
+      onBack={() => setScreen("parentHome")}
+      onProfilePress={() => setScreen("parentProfile")}
+      onNotificationSettingsPress={() =>
+        setScreen("parentNotificationSettings")
+      }
+    />
+  );
+}
+
+// ABOUT QUIETCUE SCREEN
+if (screen === "aboutQuietCue") {
+  return (
+    <AboutQuietCueScreen
+      onBack={() => setScreen("parentHome")}
+    />
+  );
+}
+
+if (screen === "parentPrivacySecurity") {
+  return (
+    <ParentPrivacySecurityScreen
+      onBack={() => setScreen("parentHome")}
+    />
+  );
+}
 
     // PARENT TASKS SCREEN
     if (screen === "parentTasks") {
@@ -187,6 +295,8 @@ if (screen === "loading") {
           <StatusBar style="dark" />
           <ParentTasksScreen
           onBack={() => setScreen("parentHome")}
+          onFocusTabPress={() => setScreen("parentFocus")}
+          onMessagesPress={() => setScreen("parentMessages")}
           onFocusPress={async (taskId, taskTitle) => {
   const selectedTask = {
     id: taskId,
@@ -223,19 +333,62 @@ onTaskDeleted={async (taskId) => {
       );
     }
 
-   // PARENT FOCUS SCREEN
-if (screen === "parentFocus") {
-  return (
-    <>
-      <StatusBar style="dark" />
-      <ParentFocusScreen
+ // PARENT FOCUS SCREEN
+  if (screen === "parentFocus") {
+    return (
+      <>
+        <StatusBar style="dark" />
+       <ParentFocusScreen
         onHomePress={() => setScreen("parentHome")}
         onTasksPress={() => setScreen("parentTasks")}
+        onMessagesPress={() => setScreen("parentMessages")}
         selectedTaskTitle={selectedFocusTask?.title ?? null}
       />
-    </>
-  );
-}
+      </>
+    );
+  }
+
+  // PARENT MESSAGES SCREEN
+  if (screen === "parentMessages") {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <ParentMessagesScreen
+          onHomePress={() => setScreen("parentHome")}
+          onTasksPress={() => setScreen("parentTasks")}
+          onFocusPress={() => setScreen("parentFocus")}
+        />
+      </>
+    );
+  }
+
+   // PARENT NOTIFICATIONS SCREEN
+  if (screen === "parentNotifications") {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <ParentNotificationsScreen
+          onBack={() => setScreen("parentHome")}
+          onSettingsPress={() => {
+            setNotificationSettingsSource("parentNotifications");
+            setScreen("parentNotificationSettings");
+          }}
+        />
+      </>
+    );
+  }
+
+  // PARENT NOTIFICATION SETTINGS SCREEN
+  if (screen === "parentNotificationSettings") {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <ParentNotificationSettingsScreen
+          onBack={() => setScreen(notificationSettingsSource)}
+        />
+      </>
+    );
+  }
 
     // LOGIN SCREEN
     return (

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   View,
   Text,
@@ -137,13 +138,19 @@ export default function LoginScreen({
                 />
 
                 <Pressable
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.showButton}
-                >
-                  <Text style={styles.showText}>
-                    {showPassword ? "Hide" : "Show"}
-                  </Text>
-                </Pressable>
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.showButton}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showPassword ? "Hide password" : "Show password"
+                }
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={22}
+                  color="#BE356C"
+                />
+              </Pressable>
               </View>
 
               <Pressable
@@ -291,8 +298,10 @@ logo: {
   },
 
   showButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    width: 48,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   showText: {

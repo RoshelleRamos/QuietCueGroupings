@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   View,
   Text,
@@ -15,7 +16,10 @@ import {
 
 type Props = {
   onBack: () => void;
-  onContinue: () => void;
+  onContinue: (account: {
+    fullName: string;
+    email: string;
+  }) => void;
 };
 
 export default function CreateAccountScreen({
@@ -26,6 +30,8 @@ export default function CreateAccountScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleCreateAccount = () => {
@@ -39,13 +45,18 @@ export default function CreateAccountScreen({
       return;
     }
 
-    if (!acceptedTerms) {
-      Alert.alert("Terms and Conditions", "Please accept the terms.");
+     if (!acceptedTerms) {
+      Alert.alert(
+        "Terms and Conditions",
+        "Please accept the terms."
+      );
       return;
     }
 
-    // Static UI only. No account is created yet.
-    onContinue();
+    onContinue({
+      fullName: fullName.trim(),
+      email: email.trim().toLowerCase(),
+    });
   };
 
   return (
@@ -91,23 +102,57 @@ export default function CreateAccountScreen({
               onChangeText={setEmail}
             />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#A58A96"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                placeholderTextColor="#A58A96"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                autoCapitalize="none"
+              />
 
+              <Pressable
+                onPress={() => setShowPassword(!showPassword)}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={22}
+                  color="#BE356C"
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.passwordContainer}>
             <TextInput
-              style={styles.input}
+              style={styles.passwordInput}
               placeholder="Confirm your password"
               placeholderTextColor="#A58A96"
-              secureTextEntry
+              secureTextEntry={!showConfirmPassword}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
+              autoCapitalize="none"
             />
+
+            <Pressable
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                showConfirmPassword ? "Hide confirm password" : "Show confirm password"
+              }
+              style={styles.eyeButton}
+            >
+              <Ionicons
+                name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                size={22}
+                color="#BE356C"
+              />
+            </Pressable>
+          </View>
 
             <Pressable
               style={styles.termsRow}
@@ -224,6 +269,31 @@ logo: {
   },
   backButton: {
     marginTop: 18,
+  },
+    passwordContainer: {
+    width: "100%",
+    height: 46,
+    borderWidth: 1,
+    borderColor: "#E98DAE",
+    borderRadius: 24,
+    backgroundColor: "#FFF9FB",
+    marginBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+    height: "100%",
+    paddingLeft: 16,
+    paddingRight: 8,
+    fontSize: 14,
+    color: "#553241",
+  },
+  eyeButton: {
+    width: 48,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
   },
   backText: {
     color: "#BE356C",

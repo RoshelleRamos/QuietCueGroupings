@@ -12,17 +12,22 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { addNotification } from "../utils/notifications";
 const TASKS_STORAGE_KEY = "@quietcue_parent_tasks";
 
 type Props = {
   onBack: () => void;
   onFocusPress: (taskId: number, taskTitle: string) => void;
+  onFocusTabPress: () => void;
+  onMessagesPress: () => void;
   onTaskDeleted: (taskId: number) => void;
 };
 
 export default function ParentTasksScreen({
   onBack,
   onFocusPress,
+  onFocusTabPress,
+  onMessagesPress,
   onTaskDeleted,
 }: Props) {
 
@@ -55,8 +60,16 @@ const handleAddTask = () => {
     },
   ]);
 
-  setNewTask("");
-  setModalVisible(false);
+ setNewTask("");
+
+void addNotification(
+  "New Task Added",
+  `You added a new task: "${title}".`,
+  "task"
+);
+
+setModalVisible(false);
+
 };
 
 const handleToggleTask = (taskId: number) => {
@@ -76,10 +89,20 @@ const handleToggleTask = (taskId: number) => {
 
   if (willBeCompleted) {
     onTaskDeleted(taskId);
+
+    void addNotification(
+      "Task Completed",
+      `Great job! You completed the task: "${taskToToggle.title}".`,
+      "task"
+    );
   }
 };
 
 const handleDeleteTask = (taskId: number) => {
+  const taskToDelete = tasks.find((task) => task.id === taskId);
+
+  if (!taskToDelete) return;
+
   Alert.alert(
     "Delete Task",
     "Are you sure you want to delete this task?",
@@ -97,6 +120,12 @@ const handleDeleteTask = (taskId: number) => {
           );
 
           onTaskDeleted(taskId);
+
+          void addNotification(
+          "Task Deleted",
+          `You deleted the task: "${taskToDelete.title}".`,
+          "task"
+        );
         },
       },
     ]
@@ -416,7 +445,30 @@ useEffect(() => {
             </View>
           </View>
         </View>
-      </Modal>
+</Modal>
+
+      {/* BOTTOM NAVIGATION */}
+      <View style={styles.bottomBar}>
+        <Pressable style={styles.navButton} onPress={onBack}>
+          <Ionicons name="home-outline" size={23} color="#FFFFFF" />
+          <Text style={styles.navText}>Home</Text>
+        </Pressable>
+
+        <View style={styles.activeNavItem}>
+          <Ionicons name="checkbox" size={23} color="#FFFFFF" />
+          <Text style={styles.navText}>Tasks</Text>
+        </View>
+
+        <Pressable style={styles.navButton} onPress={onFocusTabPress}>
+          <Ionicons name="timer-outline" size={23} color="#FFFFFF" />
+          <Text style={styles.navText}>Focus</Text>
+        </Pressable>
+
+        <Pressable style={styles.navButton} onPress={onMessagesPress}>
+          <Ionicons name="chatbubble-outline" size={23} color="#FFFFFF" />
+          <Text style={styles.navText}>Messages</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -639,4 +691,39 @@ startFocusText: {
     color: "#FFFFFF",
     fontWeight: "700",
   },
+
+   bottomBar: {
+    backgroundColor: "#DB6795",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+  },
+
+  activeNavItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#BE4779",
+    borderRadius: 18,
+    paddingVertical: 7,
+  },
+
+  navButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 7,
+  },
+
+  navText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+
 });

@@ -1,6 +1,6 @@
 
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,23 +9,80 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-   Alert,
+  Alert,
   Image,
+  Modal,
+  AppState,
 } from "react-native";
+
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  NOTIFICATIONS_STORAGE_KEY,
+  type NotificationItem,
+} from "../utils/notifications";
 
 type Props = {
   onTasksPress: () => void;
   onFocusPress: () => void;
+  onMessagesPress: () => void;
+  onNotificationsPress: () => void;
+  onNotificationSettingsPress: () => void;
+  onProfilePress: () => void;
+  onAppSettingsPress: () => void;
+  onAboutPress: () => void;
+  onPrivacyPress: () => void;
   onLogout: () => void;
 };
 
 export default function ParentHomeScreen({
   onTasksPress,
   onFocusPress,
+  onMessagesPress,
+  onNotificationsPress,
+  onNotificationSettingsPress,
+  onProfilePress,
+  onAppSettingsPress,
+  onAboutPress,
+  onPrivacyPress,
   onLogout,
 }: Props) {
+
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [menuVisible, setMenuVisible] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadUnreadNotifications = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(
+          NOTIFICATIONS_STORAGE_KEY
+        );
+
+        const notifications: NotificationItem[] = saved
+          ? JSON.parse(saved)
+          : [];
+
+        if (active) {
+          setUnreadCount(
+            notifications.filter((item) => !item.read).length
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load unread notifications:",
+          error
+        );
+      }
+    };
+
+    void loadUnreadNotifications();
+
+    return () => {
+      active = false;
+    };
+  }, []);
     
   const [tasks, setTasks] = useState<
   { id: number; title: string; completed: boolean }[]
@@ -47,6 +104,100 @@ useEffect(() => {
   };
 
   loadTasks();
+}, []);
+
+const [availability, setAvailability] = useState("Available");
+const [availableAt, setAvailableAt] = useState("");
+
+useEffect(() => {
+  const loadAvailability = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(
+        "@quietcue_parent_profile_v1"
+      );
+
+      if (saved) {
+  const profile = JSON.parse(saved);
+
+  const scheduledTime = Number(profile?.availableAtTimestamp);
+
+  const hasExpired =
+    profile?.availability !== "Available" &&
+    profile?.availableAtTimestamp != null &&
+    Number.isFinite(scheduledTime) &&
+    Date.now() >= scheduledTime;
+
+  if (hasExpired) {
+    const updatedProfile = {
+      ...profile,
+      availability: "Available",
+      availableAt: "",
+      availableAtTimestamp: null,
+    };
+
+    await AsyncStorage.setItem(
+      "@quietcue_parent_profile_v1",
+      JSON.stringify(updatedProfile)
+    );
+
+    setAvailability("Available");
+    setAvailableAt("");
+  } else {
+    const scheduledTime = Number(profile?.availableAtTimestamp);
+
+const hasExpired =
+  profile?.availability !== "Available" &&
+  profile?.availableAtTimestamp != null &&
+  Number.isFinite(scheduledTime) &&
+  Date.now() >= scheduledTime;
+
+if (hasExpired) {
+  const updatedProfile = {
+    ...profile,
+    availability: "Available",
+    availableAt: "",
+    availableAtTimestamp: null,
+  };
+
+  await AsyncStorage.setItem(
+    "@quietcue_parent_profile_v1",
+    JSON.stringify(updatedProfile)
+  );
+
+  setAvailability("Available");
+  setAvailableAt("");
+} else {
+  setAvailability(profile?.availability ?? "Available");
+  setAvailableAt(profile?.availableAt ?? "");
+}
+  }
+}
+    } catch (error) {
+      console.error("Failed to load availability:", error);
+    }
+  };
+
+void loadAvailability();
+
+const interval = setInterval(() => {
+  if (AppState.currentState === "active") {
+    void loadAvailability();
+  }
+}, 10000);
+
+const subscription = AppState.addEventListener(
+  "change",
+  (nextState) => {
+    if (nextState === "active") {
+      void loadAvailability();
+    }
+  }
+);
+
+return () => {
+  clearInterval(interval);
+  subscription.remove();
+};
 }, []);
 
 const completedCount = tasks.filter(
@@ -95,45 +246,69 @@ const dashboardTasks = [...tasks]
   </View>
 
   <View style={styles.headerActions}>
-    <Pressable
-      accessibilityLabel="Notifications"
-      onPress={() =>
-        Alert.alert(
-          "Notifications",
-          "Notifications will be added soon."
-        )
-      }
-    >
-      <Ionicons
-        name="notifications-outline"
-        size={25}
-        color="#FFFFFF"
-      />
-    </Pressable>
+<Pressable
+  accessibilityLabel="Notifications"
+  onPress={onNotificationsPress}
+  style={{
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+>
+  <Ionicons
+    name="notifications"
+    size={25}
+    color="#FFD700"
+  />
 
-    <Pressable
-      accessibilityLabel="Menu"
-      onPress={() =>
-        Alert.alert(
-            "QuietCue Menu",
-            "What would you like to do?",
-            [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Logout",
-                style: "destructive",
-                onPress: onLogout,
-            },
-            ]
-        )
-        }
+  {unreadCount > 0 && (
+  <View
+    style={{
+      position: "absolute",
+      top: -3,
+      right: -6,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: "#E53935",
+      borderWidth: 1.5,
+      borderColor: "#FFF8FB",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 3,
+    }}
+  >
+    <Text
+      style={{
+        color: "#FFFFFF",
+        fontSize: 10,
+        fontWeight: "bold",
+      }}
     >
-      <Ionicons
-        name="menu-outline"
-        size={28}
-        color="#FFFFFF"
-      />
-    </Pressable>
+      {unreadCount > 9 ? "9+" : unreadCount}
+    </Text>
+  </View>
+)}
+</Pressable>
+
+<Pressable
+  accessibilityLabel="Menu"
+  onPress={() => setMenuVisible(true)}
+  style={{
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+>
+  <Ionicons
+    name="menu"
+    size={28}
+    color="#FFFFFF"
+  />
+</Pressable>
+
   </View>
 </View>
 
@@ -152,12 +327,26 @@ const dashboardTasks = [...tasks]
         <View style={styles.profileInfo}>
             <Text style={styles.parentName}>Parent: Taylor Swift</Text>
 
-            <View style={styles.statusRow}>
-            <View style={styles.busyDot} />
-            <Text style={styles.statusText}>
-                Busy  |  Available at 6:00 PM
-            </Text>
-            </View>
+                    <View style={styles.statusRow}>
+          <View
+            style={[
+              styles.busyDot,
+              {
+                backgroundColor:
+                  availability === "Available"
+                    ? "#22C55E"
+                    : availability === "On Break"
+                    ? "#F59E0B"
+                    : "#EF4444",
+              },
+            ]}
+          />
+
+          <Text style={styles.statusText}>
+            {availability}
+          </Text>
+        </View>
+
         </View>
         </View>
 
@@ -394,16 +583,159 @@ const dashboardTasks = [...tasks]
 
   {/* MESSAGES */}
   <Pressable
-    style={styles.navButton}
-    onPress={() =>
-      Alert.alert("Messages", "Messages screen coming soon.")
-    }
-  >
-    <Ionicons name="chatbubble-outline" size={23} color="#FFFFFF" />
-    <Text style={styles.navText}>Messages</Text>
-  </Pressable>
+  style={styles.navButton}
+  onPress={onMessagesPress}
+>
+  <Ionicons
+    name="chatbubble-outline"
+    size={23}
+    color="#FFFFFF"
+  />
+  <Text style={styles.navText}>Messages</Text>
+</Pressable>
 
 </View>
+
+{/* PARENT MENU */}
+<Modal
+  visible={menuVisible}
+  transparent
+  animationType="slide"
+  onRequestClose={() => setMenuVisible(false)}
+>
+  <View
+    style={{
+      flex: 1,
+      flexDirection: "row",
+      backgroundColor: "rgba(0,0,0,0.4)",
+    }}
+  >
+    <Pressable
+      style={{ flex: 1 }}
+      onPress={() => setMenuVisible(false)}
+    />
+
+    <View
+      style={{
+        width: "82%",
+        maxWidth: 340,
+        backgroundColor: "#FFF8FB",
+        paddingTop: 65,
+        paddingHorizontal: 20,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 25,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 22,
+            fontWeight: "700",
+            color: "#49303C",
+          }}
+        >
+          Parent Menu
+        </Text>
+
+        <Pressable onPress={() => setMenuVisible(false)}>
+          <Ionicons
+            name="close"
+            size={26}
+            color="#B53166"
+          />
+        </Pressable>
+      </View>
+
+      {[
+        { title: "My Profile", icon: "person-outline" },
+        { title: "Notification Settings", icon: "notifications-outline" },
+        { title: "App Settings", icon: "settings-outline" },
+        { title: "Privacy & Security", icon: "shield-checkmark-outline" },
+        { title: "About QuietCue", icon: "information-circle-outline" },
+      ].map((item) => (
+      <Pressable
+        key={item.title}
+      onPress={() => {
+      setMenuVisible(false);
+
+      if (item.title === "My Profile") {
+        onProfilePress();
+      } else if (item.title === "Notification Settings") {
+        onNotificationSettingsPress();
+      } else if (item.title === "App Settings") {
+      console.log("APP SETTINGS PRESSED");
+      onAppSettingsPress();
+
+      } else if (item.title === "Privacy & Security") {
+  onPrivacyPress();
+
+    } else if (item.title === "About QuietCue") {
+      onAboutPress();
+
+    } else if (item.title === "Logout") {
+      onLogout();
+    }
+    }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingVertical: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: "#F4DCE5",
+        }}
+      >
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "600",
+              color: "#49303C",
+            }}
+          >
+            {item.title}
+          </Text>
+          </Pressable>
+          ))}
+      <Pressable
+        onPress={() => {
+          setMenuVisible(false);
+          Alert.alert(
+            "Logout",
+            "Are you sure you want to logout?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Logout",
+                style: "destructive",
+                onPress: onLogout,
+              },
+            ]
+          );
+        }}
+        style={{
+          marginTop: 30,
+          paddingVertical: 15,
+          borderTopWidth: 1,
+          borderTopColor: "#F4DCE5",
+        }}
+      >
+        <Text
+          style={{
+            color: "#B53166",
+            fontSize: 16,
+            fontWeight: "700",
+          }}
+        >
+          Logout
+        </Text>
+      </Pressable>
+    </View>
+  </View>
+</Modal>
 
     </SafeAreaView>
   );
