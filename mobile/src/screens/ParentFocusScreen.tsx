@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Svg, { Circle } from "react-native-svg";
+import { addNotification } from "../utils/notifications";
 
 const FOCUS_DURATION = 30 * 60;
 const STORAGE_KEY = "@quietcue_parent_focus_v1";
@@ -19,6 +20,7 @@ const STORAGE_KEY = "@quietcue_parent_focus_v1";
 type Props = {
   onHomePress: () => void;
   onTasksPress: () => void;
+  onMessagesPress: () => void;
   selectedTaskTitle?: string | null;
 };
 
@@ -53,42 +55,76 @@ function synchronizeTimer(
   now = Date.now()
 ): FocusData {
   const today = getLocalDate();
+
   const elapsed = data.isRunning
     ? Math.max(0, Math.floor((now - data.lastUpdated) / 1000))
     : 0;
 
-  const countedSeconds = Math.min(elapsed, data.secondsLeft);
+  const countedSeconds = Math.min(
+    elapsed,
+    Math.max(0, data.secondsLeft)
+  );
 
   const sessionCompleted =
-  data.isRunning &&
-  data.secondsLeft > 0 &&
-  elapsed >= data.secondsLeft;
+    data.isRunning &&
+    data.secondsLeft > 0 &&
+    countedSeconds >= data.secondsLeft;
+
+  const sameDay = data.date === today;
+
+  // Count only the portion of a running session
+  // that belongs to the current calendar day.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const countedToday = sameDay
+    ? countedSeconds
+    : data.isRunning
+      ? Math.min(
+          countedSeconds,
+          Math.max(
+            0,
+            Math.floor(
+              (now - Math.max(data.lastUpdated, startOfToday.getTime())) /
+                1000
+            )
+          )
+        )
+      : 0;
 
   return {
-    secondsLeft: Math.max(0, data.secondsLeft - countedSeconds),
-    isRunning: data.isRunning && data.secondsLeft > elapsed,
+    secondsLeft: Math.max(
+      0,
+      data.secondsLeft - countedSeconds
+    ),
+    isRunning:
+      data.isRunning &&
+      data.secondsLeft > elapsed,
     lastUpdated: data.isRunning
       ? data.lastUpdated + elapsed * 1000
       : now,
     totalSeconds:
-    (data.date === today ? data.totalSeconds : 0) +
-    countedSeconds,
+      (sameDay ? data.totalSeconds : 0) +
+      countedToday,
     completedSessions:
-    (data.date === today ? (data.completedSessions ?? 0) : 0) +
-    (sessionCompleted ? 1 : 0),
+      (sameDay ? (data.completedSessions ?? 0) : 0) +
+      (sessionCompleted ? 1 : 0),
     date: today,
-    };
+  };
 }
 
 export default function ParentFocusScreen({
   onHomePress,
   onTasksPress,
+  onMessagesPress,
   selectedTaskTitle,
 }: Props) {
+
   const [focus, setFocus] = useState<FocusData>(createInitialData);
   const [isLoaded, setIsLoaded] = useState(false);
   const completionAlertShown = React.useRef(false);
 const previousSecondsLeft = React.useRef<number | null>(null);
+const previousCompletedSessions = React.useRef<number | null>(null);
 
   const loadFocus = useCallback(async () => {
     try {
@@ -119,12 +155,12 @@ const previousSecondsLeft = React.useRef<number | null>(null);
     }
   }, []);
 
-  useEffect(() => {
-    loadFocus();
-  }, [loadFocus]);
+ useEffect(() => {
+  loadFocus();
+}, [loadFocus]);
 
   const saveFocus = async (updated: FocusData) => {
-    try {
+    try {useEffect
       await AsyncStorage.setItem(
         STORAGE_KEY,
         JSON.stringify(updated)
@@ -147,37 +183,56 @@ const previousSecondsLeft = React.useRef<number | null>(null);
   useEffect(() => {
     if (!isLoaded) return;
 
-    saveFocus(focus);
-
-    
+    saveFocus(focus); 
   }, [focus, isLoaded]);
+
+
 useEffect(() => {
   if (!isLoaded) return;
 
-  const previous = previousSecondsLeft.current;
-  const current = focus.secondsLeft;
+  const currentCompleted = focus.completedSessions ?? 0;
+  const previousCompleted = previousCompletedSessions.current;
 
-  if (
-    previous !== null &&
-    previous > 0 &&
-    current === 0 &&
-    !completionAlertShown.current
-  ) {
-    completionAlertShown.current = true;
-
-    Alert.alert(
-      "Focus Session Complete! 🎉",
-      "Great job! You've completed your 30-minute focus session. Keep up the good work!",
-      [{ text: "OK" }]
-    );
+  // Establish a baseline after loading saved focus data.
+  if (previousCompleted === null) {
+    previousCompletedSessions.current = currentCompleted;
+    previousSecondsLeft.current = focus.secondsLeft;
+    return;
   }
 
-  if (current === FOCUS_DURATION) {
+  const newSessionCompleted =
+    currentCompleted > previousCompleted;
+
+  if (
+  newSessionCompleted &&
+  !completionAlertShown.current
+) {
+  completionAlertShown.current = true;
+
+  void addNotification(
+  "Focus Session Completed! 🎉",
+  "Great job! You completed your 30-minute focus session. Keep up the good work!",
+  "focus"
+);
+
+  Alert.alert(
+    "Focus Session Complete! 🎉",
+    "Great job! You've completed your 30-minute focus session. Keep up the good work!",
+    [{ text: "OK" }]
+  );
+}
+
+  if (focus.secondsLeft === FOCUS_DURATION) {
     completionAlertShown.current = false;
   }
 
-  previousSecondsLeft.current = current;
-}, [focus.secondsLeft, isLoaded]);
+  previousCompletedSessions.current = currentCompleted;
+  previousSecondsLeft.current = focus.secondsLeft;
+}, [
+  focus.secondsLeft,
+  focus.completedSessions,
+  isLoaded,
+]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -517,12 +572,7 @@ const dailyGoalMinutes = 120;
 
         <Pressable
           style={styles.navButton}
-          onPress={() =>
-            Alert.alert(
-              "Messages",
-              "Messages screen coming soon."
-            )
-          }
+          onPress={onMessagesPress}
         >
           <Ionicons
             name="chatbubble-outline"
@@ -531,10 +581,11 @@ const dailyGoalMinutes = 120;
           />
           <Text style={styles.navText}>Messages</Text>
         </Pressable>
-      </View>
-    </SafeAreaView>
-  );
-}
+
+              </View>
+            </SafeAreaView>
+          );
+        }
 
 const styles = StyleSheet.create({
   container: {
