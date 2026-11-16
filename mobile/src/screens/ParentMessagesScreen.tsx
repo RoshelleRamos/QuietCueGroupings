@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -76,6 +78,11 @@ export default function ParentMessagesScreen({
   const [search, setSearch] = useState("");
   const [messageText, setMessageText] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const chatScrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const [showNewMessage, setShowNewMessage] = useState(false);
+const [showAddContact, setShowAddContact] = useState(false);
+const [newContactName, setNewContactName] = useState("");
+const [newContactRole, setNewContactRole] = useState("Family Member");
 
   useEffect(() => {
     async function loadMessages() {
@@ -149,6 +156,102 @@ export default function ParentMessagesScreen({
     setMessageText("");
   };
 
+  const openContactConversation = (contactId: string) => {
+  setSelectedId(contactId);
+  setMessageText("");
+  setShowNewMessage(false);
+  setShowAddContact(false);
+};
+
+const addNewContact = () => {
+  const name = newContactName.trim();
+  const role = newContactRole.trim() || "Family Member";
+
+  if (!name) {
+    Alert.alert("Missing Name", "Please enter a contact name.");
+    return;
+  }
+
+  const existingContact = conversations.find(
+    (contact) => contact.name.toLowerCase() === name.toLowerCase()
+  );
+
+  if (existingContact) {
+    Alert.alert(
+      "Contact Already Exists",
+      "A contact with this name already exists."
+    );
+    return;
+  }
+
+  const newContact: Conversation = {
+    id: `contact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    role,
+    messages: [],
+  };
+
+  setConversations((previous) => [...previous, newContact]);
+
+  setNewContactName("");
+  setNewContactRole("Family Member");
+
+  openContactConversation(newContact.id);
+};
+
+const deleteMessage = (conversationId: string, messageId: string) => {
+  Alert.alert(
+    "Delete Message",
+    "Are you sure you want to delete this message?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          setConversations((previous) =>
+            previous.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    messages: conversation.messages.filter(
+                      (message) => message.id !== messageId
+                    ),
+                  }
+                : conversation
+            )
+          );
+        },
+      },
+    ]
+  );
+};
+
+const deleteConversation = (conversationId: string) => {
+  Alert.alert(
+    "Delete Conversation",
+    "Delete this conversation and all its messages? This cannot be undone.",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          setConversations((previous) =>
+            previous.filter(
+              (conversation) => conversation.id !== conversationId
+            )
+          );
+
+          if (selectedId === conversationId) {
+            setSelectedId(null);
+          }
+        },
+      },
+    ]
+  );
+};
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -166,29 +269,63 @@ export default function ParentMessagesScreen({
             : "Messages"}
         </Text>
 
+        <Pressable
+        onPress={() => {
+          setShowAddContact(false);
+          setShowNewMessage(true);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="New Message"
+        hitSlop={10}
+      >
         <Ionicons
           name="chatbubbles-outline"
           size={24}
           color="#FFFFFF"
         />
+      </Pressable>
       </View>
 
       {selectedConversation ? (
         <KeyboardAvoidingView
-          style={styles.chatContainer}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
+        style={styles.chatContainer}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
           <ScrollView
+            ref={chatScrollRef}
             style={styles.chatList}
             contentContainerStyle={styles.chatContent}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => {
+              chatScrollRef.current?.scrollToEnd({ animated: true });
+            }}
           >
             <Text style={styles.chatRole}>
               {selectedConversation.role}
             </Text>
 
+            <Pressable
+            style={styles.deleteConversationButton}
+            onPress={() => deleteConversation(selectedConversation.id)}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={15}
+              color="#B53166"
+            />
+            <Text style={styles.deleteConversationText}>
+              Delete Conversation
+            </Text>
+          </Pressable>
+
             {selectedConversation.messages.map((message) => (
-              <View
+              <Pressable
                 key={message.id}
+                onLongPress={() =>
+                  deleteMessage(selectedConversation.id, message.id)
+                }
+                delayLongPress={450}
                 style={[
                   styles.messageBubble,
                   message.sender === "me"
@@ -213,7 +350,7 @@ export default function ParentMessagesScreen({
                 >
                   {message.time}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
 
@@ -225,6 +362,8 @@ export default function ParentMessagesScreen({
               value={messageText}
               onChangeText={setMessageText}
               multiline
+              blurOnSubmit={false}
+              textAlignVertical="center"
             />
 
             <Pressable
@@ -269,6 +408,8 @@ export default function ParentMessagesScreen({
                     key={conversation.id}
                     style={styles.conversationCard}
                     onPress={() => setSelectedId(conversation.id)}
+                    onLongPress={() => deleteConversation(conversation.id)}
+                    delayLongPress={500}
                   >
                     <View style={styles.avatar}>
                       <Text style={styles.avatarText}>
@@ -277,9 +418,19 @@ export default function ParentMessagesScreen({
                     </View>
 
                     <View style={styles.conversationInfo}>
-                      <Text style={styles.conversationName}>
+                      <View style={styles.conversationNameRow}>
+                      <Text
+                        style={styles.conversationName}
+                        numberOfLines={1}
+                        
+                      >
                         {conversation.name}
                       </Text>
+
+                      <Text style={styles.lastMessageTime}>
+                        {lastMessage?.time ?? ""}
+                      </Text>
+                    </View>
 
                       <Text style={styles.conversationRole}>
                         {conversation.role}
@@ -305,6 +456,131 @@ export default function ParentMessagesScreen({
           </ScrollView>
         </View>
       )}
+
+      <Modal
+  visible={showNewMessage}
+  animationType="slide"
+  transparent
+  onRequestClose={() => {
+    setShowNewMessage(false);
+    setShowAddContact(false);
+  }}
+>
+  <View style={styles.newMessageOverlay}>
+    <View style={styles.newMessagePanel}>
+      <View style={styles.newMessageHeader}>
+        <Text style={styles.newMessageTitle}>
+          {showAddContact ? "Add New Contact" : "New Message"}
+        </Text>
+
+        <Pressable
+          onPress={() => {
+            setShowNewMessage(false);
+            setShowAddContact(false);
+          }}
+        >
+          <Ionicons name="close" size={25} color="#FFFFFF" />
+        </Pressable>
+      </View>
+
+      {showAddContact ? (
+        <View style={styles.addContactForm}>
+          <Text style={styles.contactLabel}>Contact Name</Text>
+
+          <TextInput
+            style={styles.contactInput}
+            placeholder="Enter contact name"
+            placeholderTextColor="#9B8290"
+            value={newContactName}
+            onChangeText={setNewContactName}
+            maxLength={60}
+          />
+
+          <Text style={styles.contactLabel}>Role</Text>
+
+          <TextInput
+            style={styles.contactInput}
+            placeholder="Family Member, Teacher, etc."
+            placeholderTextColor="#9B8290"
+            value={newContactRole}
+            onChangeText={setNewContactRole}
+            maxLength={40}
+          />
+
+          <Pressable
+            style={styles.addContactSaveButton}
+            onPress={addNewContact}
+          >
+            <Text style={styles.addContactSaveText}>
+              Save & Start Chat
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setShowAddContact(false)}
+            style={styles.cancelContactButton}
+          >
+            <Text style={styles.cancelContactText}>
+              Back to Contacts
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.contactListContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.contactListLabel}>
+            Select a Contact
+          </Text>
+
+          {conversations.map((contact) => (
+            <Pressable
+              key={contact.id}
+              style={styles.contactSelectRow}
+              onPress={() => openContactConversation(contact.id)}
+            >
+              <View style={styles.contactAvatar}>
+                <Text style={styles.contactAvatarText}>
+                  {contact.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.contactSelectName}>
+                  {contact.name}
+                </Text>
+                <Text style={styles.contactSelectRole}>
+                  {contact.role}
+                </Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color="#B53166"
+              />
+            </Pressable>
+          ))}
+
+          <Pressable
+            style={styles.addNewContactRow}
+            onPress={() => setShowAddContact(true)}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={24}
+              color="#B53166"
+            />
+            <Text style={styles.addNewContactText}>
+              Add New Contact
+            </Text>
+          </Pressable>
+        </ScrollView>
+      )}
+    </View>
+  </View>
+</Modal>
 
       <View style={styles.bottomBar}>
         <Pressable style={styles.navButton} onPress={onHomePress}>
@@ -414,6 +690,7 @@ const styles = StyleSheet.create({
     color: "#B53166",
     fontSize: 16,
     fontWeight: "700",
+    flexShrink: 1,
   },
   conversationRole: {
     color: "#775465",
@@ -485,6 +762,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#F4B7CD",
+    minHeight: 68,
   },
   messageInput: {
     flex: 1,
@@ -496,6 +774,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     maxHeight: 100,
     color: "#49303C",
+    minHeight: 44,
   },
   sendButton: {
     backgroundColor: "#B53166",
@@ -539,4 +818,158 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 4,
   },
+
+  newMessageOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.4)",
+  justifyContent: "center",
+  paddingHorizontal: 18,
+},
+newMessagePanel: {
+  backgroundColor: "#FFF8FB",
+  borderRadius: 22,
+  overflow: "hidden",
+  maxHeight: "80%",
+},
+newMessageHeader: {
+  backgroundColor: "#D45A88",
+  paddingHorizontal: 20,
+  paddingVertical: 18,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+newMessageTitle: {
+  color: "#FFFFFF",
+  fontSize: 19,
+  fontWeight: "700",
+},
+contactListContent: {
+  padding: 18,
+},
+contactListLabel: {
+  fontSize: 15,
+  fontWeight: "700",
+  color: "#49303C",
+  marginBottom: 14,
+},
+contactSelectRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: "#FFFFFF",
+  borderWidth: 1,
+  borderColor: "#F4B7CD",
+  borderRadius: 14,
+  padding: 12,
+  marginBottom: 10,
+},
+contactAvatar: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: "#B53166",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 12,
+},
+contactAvatarText: {
+  color: "#FFFFFF",
+  fontWeight: "700",
+  fontSize: 18,
+},
+contactSelectName: {
+  color: "#49303C",
+  fontWeight: "700",
+  fontSize: 14,
+},
+contactSelectRole: {
+  color: "#775465",
+  fontSize: 12,
+  marginTop: 3,
+},
+addNewContactRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 1,
+  borderStyle: "dashed",
+  borderColor: "#B53166",
+  borderRadius: 14,
+  padding: 16,
+  marginTop: 8,
+},
+addNewContactText: {
+  color: "#B53166",
+  fontWeight: "700",
+  marginLeft: 8,
+},
+addContactForm: {
+  padding: 20,
+},
+contactLabel: {
+  fontSize: 13,
+  fontWeight: "700",
+  color: "#49303C",
+  marginBottom: 8,
+},
+contactInput: {
+  backgroundColor: "#FFFFFF",
+  borderWidth: 1,
+  borderColor: "#F4B7CD",
+  borderRadius: 12,
+  paddingHorizontal: 14,
+  paddingVertical: 12,
+  color: "#49303C",
+  marginBottom: 18,
+},
+addContactSaveButton: {
+  backgroundColor: "#B53166",
+  borderRadius: 14,
+  paddingVertical: 14,
+  alignItems: "center",
+},
+addContactSaveText: {
+  color: "#FFFFFF",
+  fontWeight: "700",
+  fontSize: 14,
+},
+cancelContactButton: {
+  alignItems: "center",
+  paddingVertical: 14,
+  marginTop: 8,
+},
+cancelContactText: {
+  color: "#B53166",
+  fontWeight: "600",
+},
+
+conversationNameRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+},
+lastMessageTime: {
+  color: "#775465",
+  fontSize: 10,
+  flexShrink: 0,
+},
+
+deleteConversationButton: {
+  alignSelf: "center",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  paddingHorizontal: 14,
+  paddingVertical: 9,
+  borderWidth: 1,
+  borderColor: "#F4B7CD",
+  borderRadius: 20,
+  marginBottom: 18,
+},
+deleteConversationText: {
+  color: "#B53166",
+  fontSize: 12,
+  fontWeight: "600",
+},
 });

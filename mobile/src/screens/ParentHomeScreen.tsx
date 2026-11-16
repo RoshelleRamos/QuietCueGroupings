@@ -22,6 +22,166 @@ import {
   type NotificationItem,
 } from "../utils/notifications";
 
+type RequestStatus = "Pending" | "Approved" | "Declined" | "Completed";
+
+type FamilyRequest = {
+  id: string;
+  name: string;
+  message: string;
+  priority: "High Priority" | "Medium Priority";
+  status: RequestStatus;
+  processedAt?: string;
+};
+
+const REQUESTS_STORAGE_KEY = "@quietcue_parent_requests_v3";
+
+const DEFAULT_REQUESTS: FamilyRequest[] = [
+  {
+    id: "request-shereen-school",
+    name: "Shereen",
+    message: "Mom, can you help me with my homework?",
+    priority: "High Priority",
+    status: "Pending",
+  },
+  {
+    id: "request-shriya-snacks",
+    name: "Shriya",
+    message: "Mom, can you prepare my snacks?",
+    priority: "Medium Priority",
+    status: "Pending",
+  },
+  {
+    id: "request-artum-grocery",
+    name: "Artum",
+    message: "Can you check our grocery list?",
+    priority: "Medium Priority",
+    status: "Pending",
+  },
+  {
+    id: "request-richard-document",
+    name: "Richard",
+    message: "Can you review my document?",
+    priority: "High Priority",
+    status: "Pending",
+  },
+
+  {
+  id: "test-shereen-homework-01",
+  name: "Shereen",
+  message: "Mom, can you help me finish my homework?",
+  priority: "High Priority",
+  status: "Pending",
+},
+{
+  id: "test-shereen-school-02",
+  name: "Shereen",
+  message: "Mom, I need materials for my school project.",
+  priority: "Medium Priority",
+  status: "Pending",
+},
+{
+  id: "test-shriya-snacks-01",
+  name: "Shriya",
+  message: "Mom, can you prepare my favorite snacks?",
+  priority: "Medium Priority",
+  status: "Pending",
+},
+{
+  id: "test-shriya-help-02",
+  name: "Shriya",
+  message: "Mom, I need your help with something important.",
+  priority: "High Priority",
+  status: "Pending",
+},
+{
+  id: "test-artum-grocery-01",
+  name: "Artum",
+  message: "Can you check our grocery list?",
+  priority: "Medium Priority",
+  status: "Pending",
+},
+{
+  id: "test-artum-call-02",
+  name: "Artum",
+  message: "Please call me when you are available.",
+  priority: "High Priority",
+  status: "Pending",
+},
+{
+  id: "test-richard-document-01",
+  name: "Richard",
+  message: "Can you review the document I sent?",
+  priority: "Medium Priority",
+  status: "Pending",
+},
+{
+  id: "test-richard-urgent-02",
+  name: "Richard",
+  message: "I need your help with an urgent family matter.",
+  priority: "High Priority",
+  status: "Pending",
+},
+];
+
+const NEW_FAMILY_DEMO_REQUESTS: FamilyRequest[] = [
+  {
+    id: "demo-shereen-homework-v2",
+    name: "Shereen",
+    message: "Mom, can you help me with my homework?",
+    priority: "High Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-shereen-school-v2",
+    name: "Shereen",
+    message: "Mom, I need some materials for my school project.",
+    priority: "Medium Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-shriya-food-v2",
+    name: "Shriya",
+    message: "Mom, can you prepare my favorite snacks?",
+    priority: "Medium Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-shriya-help-v2",
+    name: "Shriya",
+    message: "Mom, I need your help with something important.",
+    priority: "High Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-artum-grocery-v2",
+    name: "Artum",
+    message: "Can you check our grocery list?",
+    priority: "Medium Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-artum-call-v2",
+    name: "Artum",
+    message: "Please call me when you are available.",
+    priority: "High Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-richard-document-v2",
+    name: "Richard",
+    message: "Can you review the document I sent?",
+    priority: "Medium Priority",
+    status: "Pending",
+  },
+  {
+    id: "demo-richard-urgent-v2",
+    name: "Richard",
+    message: "I need your help with an urgent family matter.",
+    priority: "High Priority",
+    status: "Pending",
+  },
+];
+
 type Props = {
   onTasksPress: () => void;
   onFocusPress: () => void;
@@ -32,6 +192,7 @@ type Props = {
   onAppSettingsPress: () => void;
   onAboutPress: () => void;
   onPrivacyPress: () => void;
+  parentName: string;
   onLogout: () => void;
 };
 
@@ -45,12 +206,95 @@ export default function ParentHomeScreen({
   onAppSettingsPress,
   onAboutPress,
   onPrivacyPress,
+  parentName,
   onLogout,
 }: Props) {
 
     const [unreadCount, setUnreadCount] = useState(0);
     const [menuVisible, setMenuVisible] = useState(false);
+    const [requests, setRequests] = useState<FamilyRequest[]>([]);
+    const [requestsLoaded, setRequestsLoaded] = useState(false);
+    const [selectedRequest, setSelectedRequest] = useState<FamilyRequest | null>(null);
+    const [selectedFamilyMember, setSelectedFamilyMember] = useState<string | null>(null);
+    const [requestTab, setRequestTab] = useState<"Pending" | "History">("Pending");
 
+    useEffect(() => {
+  let active = true;
+
+  const loadRequests = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(REQUESTS_STORAGE_KEY);
+
+      if (active) {
+        const savedRequests: FamilyRequest[] =
+  saved !== null ? JSON.parse(saved) : [];
+
+const existingIds = new Set(
+  savedRequests.map((request) => request.id)
+);
+
+const missingRequests = DEFAULT_REQUESTS.filter(
+  (request) => !existingIds.has(request.id)
+);
+
+setRequests([...savedRequests, ...missingRequests]);
+      }
+    } catch (error) {
+      console.error("Failed to load requests:", error);
+
+      if (active) {
+        setRequests(DEFAULT_REQUESTS);
+      }
+    } finally {
+      if (active) {
+        setRequestsLoaded(true);
+      }
+    }
+  };
+
+  void loadRequests();
+
+  return () => {
+    active = false;
+  };
+}, []);
+
+useEffect(() => {
+  if (!requestsLoaded) return;
+
+  setRequests((previous) => {
+    const existingIds = new Set(
+      previous.map((request) => request.id)
+    );
+
+    const missingRequests = NEW_FAMILY_DEMO_REQUESTS.filter(
+      (request) => !existingIds.has(request.id)
+    );
+
+    if (missingRequests.length === 0) {
+      return previous;
+    }
+
+    return [...previous, ...missingRequests];
+  });
+}, [requestsLoaded]);
+
+useEffect(() => {
+  if (!requestsLoaded) return;
+
+  const saveRequests = async () => {
+    try {
+      await AsyncStorage.setItem(
+        REQUESTS_STORAGE_KEY,
+        JSON.stringify(requests)
+      );
+    } catch (error) {
+      console.error("Failed to save requests:", error);
+    }
+  };
+
+  void saveRequests();
+}, [requests, requestsLoaded]);
   useEffect(() => {
     let active = true;
 
@@ -216,19 +460,112 @@ const dashboardTasks = [...tasks]
   .sort((a, b) => Number(a.completed) - Number(b.completed))
   .slice(0, 3);
 
-  const requests = [
-    { name: "Roshelle", message: "school help", priority: "High Priority" },
-    { name: "Michaila", message: "layout idea", priority: "Medium Priority" },
-    { name: "French", message: "food delivery", priority: "Medium Priority" },
-    { name: "Kristine", message: "project fund", priority: "High Priority" },
-  ];
+  const pendingRequests = requests
+  
+  .filter((request) => request.status === "Pending")
+  .sort(
+    (a, b) =>
+      Number(b.priority === "High Priority") -
+      Number(a.priority === "High Priority")
+  );
 
-  const family = [
-    { name: "Roshelle Swift", status: "Focusing" },
-    { name: "Michaila Swift", status: "Focusing" },
-    { name: "Frenchella Swift", status: "On Break" },
-    { name: "Kristine Swift", status: "Available" },
-  ];
+  const requestHistory = requests
+  .filter((request) => request.status !== "Pending")
+  .sort((a, b) => {
+    const timeA = a.processedAt
+      ? new Date(a.processedAt).getTime()
+      : 0;
+
+    const timeB = b.processedAt
+      ? new Date(b.processedAt).getTime()
+      : 0;
+
+    return timeB - timeA;
+  });
+
+const updateRequestStatus = (
+  requestId: string,
+  newStatus: RequestStatus
+) => {
+  const actionLabel =
+    newStatus === "Approved"
+      ? "Approve"
+      : newStatus === "Declined"
+      ? "Decline"
+      : "Mark as Done";
+
+  Alert.alert(
+    `${actionLabel} Request`,
+    `Are you sure you want to ${actionLabel.toLowerCase()} this request?`,
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Confirm",
+        onPress: () => {
+          setRequests((previous) =>
+            previous.map((request) =>
+              request.id === requestId
+                ? {
+                  ...request,
+                  status: newStatus,
+                  processedAt: new Date().toISOString(),
+                }
+                : request
+            )
+          );
+
+          setSelectedRequest(null);
+        },
+      },
+    ]
+  );
+};
+
+const family = [
+  { id: "shereen", name: "Shereen", role: "Daughter" },
+  { id: "shriya", name: "Shriya", role: "Daughter" },
+  { id: "artum", name: "Artum", role: "Husband" },
+  { id: "richard", name: "Richard", role: "Brother" },
+];
+
+const getMemberRequests = (memberName: string): FamilyRequest[] => {
+  const firstName = memberName.trim().split(" ")[0].toLowerCase();
+
+  return requests.filter((request: FamilyRequest) => {
+    const requestFirstName = request.name
+      .trim()
+      .split(" ")[0]
+      .toLowerCase();
+
+    return requestFirstName === firstName;
+  });
+};
+const getFamilyRole = (name: string): string => {
+  const firstName = name.trim().split(" ")[0].toLowerCase();
+
+  const roles: Record<string, string> = {
+    shereen: "Daughter",
+    shriya: "Daughter",
+    artum: "Husband",
+    richard: "Brother",
+  };
+
+  return roles[firstName] ?? "Family Member";
+};
+
+
+const getRequestDisplayName = (name: string): string => {
+  const normalizedName = name.trim().toLowerCase();
+
+  const displayNames: Record<string, string> = {
+    shereen: "Shereen",
+    shriya: "Shriya",
+    artum: "Artum",
+    richard: "Richard",
+  };
+
+  return displayNames[normalizedName] ?? name;
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -325,7 +662,7 @@ const dashboardTasks = [...tasks]
         </View>
 
         <View style={styles.profileInfo}>
-            <Text style={styles.parentName}>Parent: Taylor Swift</Text>
+            <Text style={styles.parentName}>Parent: {parentName}</Text>
 
                     <View style={styles.statusRow}>
           <View
@@ -472,84 +809,411 @@ const dashboardTasks = [...tasks]
           </View>
         </View>
         {/* PENDING REQUESTS */}
-        <Text style={styles.sectionTitle}>Pending Requests</Text>
+        <View style={styles.requestSectionHeader}>
+  <Text style={styles.sectionTitle}>Family Requests</Text>
 
-        {requests.map((request, index) => {
-        const isHighPriority = request.priority === "High Priority";
+  <View style={styles.requestTabs}>
+    <Pressable
+      style={[
+        styles.requestTab,
+        requestTab === "Pending" && styles.requestTabActive,
+      ]}
+      onPress={() => setRequestTab("Pending")}
+    >
+      <Text
+        style={[
+          styles.requestTabText,
+          requestTab === "Pending" && styles.requestTabTextActive,
+        ]}
+      >
+        Pending ({pendingRequests.length})
+      </Text>
+    </Pressable>
 
-        return (
-            <View key={index} style={styles.requestCard}>
+    <Pressable
+      style={[
+        styles.requestTab,
+        requestTab === "History" && styles.requestTabActive,
+      ]}
+      onPress={() => setRequestTab("History")}
+    >
+      <Text
+        style={[
+          styles.requestTabText,
+          requestTab === "History" && styles.requestTabTextActive,
+        ]}
+      >
+        History ({requestHistory.length})
+      </Text>
+    </Pressable>
+  </View>
+</View>
+        {requestsLoaded &&
+  (requestTab === "Pending" ? pendingRequests : requestHistory).length === 0 && (
+          <View style={styles.requestCard}>
             <Text style={styles.requestText}>
-                <Text style={styles.bold}>{request.name}</Text> (Daughter) is
-                requesting for {request.message}
+              {requestTab === "Pending"
+  ? "No pending requests. You're all caught up!"
+  : "No request history yet."}
             </Text>
+          </View>
+        )}
 
-            <View
-                style={[
-                styles.priorityBadge,
-                isHighPriority
-                    ? styles.highPriorityBadge
-                    : styles.mediumPriorityBadge,
-                ]}
-            >
-                <Text
-                style={[
-                    styles.priorityText,
-                    isHighPriority
-                    ? styles.highPriorityText
-                    : styles.mediumPriorityText,
-                ]}
-                >
-                {request.priority}
-                </Text>
-            </View>
-            </View>
-        );
-        })}
+       {(requestTab === "Pending" ? pendingRequests : requestHistory).map((request) => {
+  const isHighPriority = request.priority === "High Priority";
 
-        {/* FAMILY OVERVIEW */}
-        <Text style={styles.sectionTitle}>Family Overview</Text>
+  return (
+    <Pressable
+      key={request.id}
+      style={({ pressed }) => [
+        styles.requestCard,
+        pressed && { opacity: 0.75 },
+      ]}
+      onPress={() => setSelectedRequest(request)}
+      accessibilityRole="button"
+      accessibilityLabel={`View request from ${request.name}`}
+    >
+      <Text style={styles.requestText}>
+        <Text style={styles.bold}>
+  {getRequestDisplayName(request.name)}
+</Text>{" "}
+({getFamilyRole(request.name)}) is
+        requesting for {request.message}
+      </Text>
 
-        {family.map((member, index) => {
-        const statusColor =
-            member.status === "Focusing"
-            ? "#D94C72"
-            : member.status === "On Break"
-            ? "#E5A32B"
-            : "#39A879";
+      <View
+        style={[
+          styles.priorityBadge,
+          isHighPriority
+            ? styles.highPriorityBadge
+            : styles.mediumPriorityBadge,
+        ]}
+      >
+        <Text
+          style={[
+            styles.priorityText,
+            isHighPriority
+              ? styles.highPriorityText
+              : styles.mediumPriorityText,
+          ]}
+        >
+          {request.priority}
+        </Text>
+      </View>
 
-        return (
-            <View key={index} style={styles.familyCard}>
-            <View style={styles.familyAvatar}>
-                <Text style={styles.familyAvatarText}>👩</Text>
-            </View>
+      {requestTab === "History" && (
+  <View style={styles.requestHistoryStatus}>
+    <Ionicons
+      name={
+        request.status === "Declined"
+          ? "close-circle"
+          : "checkmark-circle"
+      }
+      size={15}
+      color={
+        request.status === "Declined"
+          ? "#DC2626"
+          : "#16A34A"
+      }
+    />
 
-            <View style={styles.familyInfo}>
-                <Text style={styles.familyName}>{member.name}</Text>
+    <Text
+      style={[
+        styles.requestHistoryStatusText,
+        {
+          color:
+            request.status === "Declined"
+              ? "#DC2626"
+              : "#16A34A",
+        },
+      ]}
+    >
+      {request.status}
+    </Text>
+  </View>
+  
+)}
 
-                <View style={styles.familyStatusRow}>
-                <View
-                    style={[
-                    styles.familyStatusDot,
-                    { backgroundColor: statusColor },
-                    ]}
-                />
-                <Text style={styles.familyStatus}>
-                    {member.status}
-                </Text>
-                </View>
-            </View>
+{requestTab === "History" && (
+  <Text style={styles.requestHistoryDate}>
+    {request.processedAt
+      ? new Date(request.processedAt).toLocaleString("en-PH", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "Date not recorded"}
+  </Text>
+)}
+    </Pressable>
+  );
+})}
 
-            <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="#E45D92"
-            />
-            </View>
-        );
-        })}
+
+       {/* FAMILY OVERVIEW */}
+<Text style={styles.sectionTitle}>Family Overview</Text>
+
+{family.map((member) => {
+  const memberRequests = getMemberRequests(member.name);
+
+  const pendingCount = memberRequests.filter(
+    (request) => request.status === "Pending"
+  ).length;
+
+  const completedCount = memberRequests.filter(
+    (request) => request.status === "Completed"
+  ).length;
+
+  const statusLabel =
+    pendingCount > 0
+      ? `${pendingCount} Pending Request${pendingCount > 1 ? "s" : ""}`
+      : completedCount > 0
+      ? `${completedCount} Completed Request${completedCount > 1 ? "s" : ""}`
+      : "No Pending Requests";
+
+  const statusColor =
+    pendingCount > 0
+      ? "#E5A32B"
+      : completedCount > 0
+      ? "#39A879"
+      : "#9CA3AF";
+
+  return (
+    <Pressable
+      key={member.name}
+      style={({ pressed }) => [
+        styles.familyCard,
+        pressed && { opacity: 0.75 },
+      ]}
+      onPress={() => setSelectedFamilyMember(member.name)}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${member.name}'s family profile`}
+    >
+      <View style={styles.familyAvatar}>
+        <Text style={styles.familyAvatarText}>👩</Text>
+      </View>
+
+      <View style={styles.familyInfo}>
+        <Text style={styles.familyName}>{member.name}</Text>
+
+        <View style={styles.familyStatusRow}>
+          <View
+            style={[
+              styles.familyStatusDot,
+              { backgroundColor: statusColor },
+            ]}
+          />
+
+          <Text style={styles.familyStatus}>
+            {statusLabel}
+          </Text>
+        </View>
+      </View>
+
+      <Ionicons
+        name="chevron-forward"
+        size={20}
+        color="#E45D92"
+      />
+    </Pressable>
+  );
+})}
 
       </ScrollView>
+
+      {/* REQUEST DETAILS MODAL */}
+<Modal
+  visible={selectedRequest !== null}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setSelectedRequest(null)}
+>
+  <View style={styles.requestModalOverlay}>
+    <View style={styles.requestModalCard}>
+      <View style={styles.requestModalHeader}>
+        <Text style={styles.requestModalTitle}>
+          Request Details
+        </Text>
+
+        <Pressable onPress={() => setSelectedRequest(null)}>
+          <Ionicons name="close" size={24} color="#B53166" />
+        </Pressable>
+      </View>
+
+      {selectedRequest && (
+        <>
+          <Text style={styles.requestModalName}>
+            {selectedRequest.name} ({getFamilyRole(selectedRequest.name)})
+          </Text>
+
+          <Text style={styles.requestModalDescription}>
+            Requesting for {selectedRequest.message}
+          </Text>
+
+          <Text style={styles.requestModalPriority}>
+            {selectedRequest.priority}
+          </Text>
+
+          {selectedRequest.status === "Pending" ? (
+  <>
+
+          <Pressable
+            style={styles.requestApproveButton}
+            onPress={() =>
+              updateRequestStatus(selectedRequest.id, "Approved")
+            }
+          >
+            <Text style={styles.requestActionText}>
+              Approve Request
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.requestDeclineButton}
+            onPress={() =>
+              updateRequestStatus(selectedRequest.id, "Declined")
+            }
+          >
+            <Text style={styles.requestDeclineText}>
+              Decline Request
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.requestDoneButton}
+            onPress={() =>
+              updateRequestStatus(selectedRequest.id, "Completed")
+            }
+          >
+            <Text style={styles.requestDoneText}>
+              Mark as Done
+            </Text>
+          </Pressable>
+
+            </>
+            ) : (
+              <Text style={styles.requestHistoryMessage}>
+                This request has been {selectedRequest.status.toLowerCase()}.
+              </Text>
+            )}
+        </>
+      )}
+    </View>
+  </View>
+</Modal>
+
+{/* FAMILY MEMBER PROFILE MODAL */}
+<Modal
+  visible={selectedFamilyMember !== null}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setSelectedFamilyMember(null)}
+>
+  <View style={styles.familyModalOverlay}>
+    <View style={styles.familyModalCard}>
+      <View style={styles.familyModalHeader}>
+        <Text style={styles.familyModalTitle}>
+          Family Profile
+        </Text>
+
+        <Pressable onPress={() => setSelectedFamilyMember(null)}>
+          <Ionicons name="close" size={24} color="#B53166" />
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Text style={styles.familyModalName}>
+          {selectedFamilyMember}
+        </Text>
+
+        <Text style={styles.familyModalSubtitle}>
+          {family.find((member) => member.name === selectedFamilyMember)?.role ?? "Family Member"}
+        </Text>
+
+        <Text style={styles.familyModalSubtitle}>
+        Pending Requests:{" "}
+        {selectedFamilyMember
+          ? getMemberRequests(selectedFamilyMember).filter(
+              (request) => request.status === "Pending"
+            ).length
+          : 0}
+      </Text>
+
+        <Text style={styles.familyModalSectionTitle}>
+          Pending Requests
+        </Text>
+{getMemberRequests(selectedFamilyMember ?? "")
+  .filter((request) => request.status === "Pending")
+  .length === 0 ? (
+    <Text style={styles.familyModalEmpty}>
+      No pending requests.
+    </Text>
+  ) : (
+    getMemberRequests(selectedFamilyMember ?? "")
+      .filter((request) => request.status === "Pending")
+      .map((request) => (
+              <View key={request.id} style={styles.familyModalRequest}>
+                <Text style={styles.familyModalRequestText}>
+                  {request.message}
+                </Text>
+                <Text style={styles.familyModalRequestStatus}>
+                  {request.priority} • Pending
+                </Text>
+              </View>
+            ))
+        )}
+
+        <Text style={styles.familyModalSectionTitle}>
+          Request History
+        </Text>
+
+        {requests.filter(
+          (request) =>
+            request.status !== "Pending" &&
+            request.name.trim().toLowerCase() ===
+              selectedFamilyMember?.split(" ")[0].toLowerCase()
+        ).length === 0 ? (
+          <Text style={styles.familyModalEmpty}>
+            No request history yet.
+          </Text>
+        ) : (
+          requests
+            .filter(
+              (request) =>
+                request.status !== "Pending" &&
+                request.name.trim().toLowerCase() ===
+                  selectedFamilyMember?.split(" ")[0].toLowerCase()
+            )
+            .map((request) => (
+              <View key={request.id} style={styles.familyModalRequest}>
+                <Text style={styles.familyModalRequestText}>
+                  {request.message}
+                </Text>
+
+                <Text style={styles.familyModalRequestStatus}>
+                  {request.status}
+                </Text>
+
+                <Text style={styles.familyModalDate}>
+                  {request.processedAt
+                    ? new Date(request.processedAt).toLocaleString("en-PH", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })
+                    : "Date not recorded"}
+                </Text>
+              </View>
+            ))
+        )}
+      </ScrollView>
+    </View>
+  </View>
+</Modal>
 
  {/* FIXED BOTTOM NAVIGATION */}
 <View style={styles.bottomBar}>
@@ -1104,5 +1768,230 @@ navText: {
   fontSize: 10,
   fontWeight: "600",
   marginTop: 4,
+},
+
+requestModalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.45)",
+  justifyContent: "center",
+  paddingHorizontal: 24,
+},
+
+requestModalCard: {
+  backgroundColor: "#FFF8FB",
+  borderRadius: 20,
+  padding: 22,
+},
+
+requestModalHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 20,
+},
+
+requestModalTitle: {
+  fontSize: 19,
+  fontWeight: "700",
+  color: "#49303C",
+},
+
+requestModalName: {
+  fontSize: 16,
+  fontWeight: "700",
+  color: "#49303C",
+  marginBottom: 8,
+},
+
+requestModalDescription: {
+  fontSize: 14,
+  color: "#775465",
+  marginBottom: 12,
+},
+
+requestModalPriority: {
+  fontSize: 12,
+  fontWeight: "700",
+  color: "#B53166",
+  marginBottom: 22,
+},
+
+requestApproveButton: {
+  backgroundColor: "#B53166",
+  paddingVertical: 13,
+  borderRadius: 12,
+  alignItems: "center",
+  marginBottom: 10,
+},
+
+requestActionText: {
+  color: "#FFFFFF",
+  fontWeight: "700",
+  fontSize: 14,
+},
+
+requestDeclineButton: {
+  borderWidth: 1,
+  borderColor: "#B53166",
+  paddingVertical: 13,
+  borderRadius: 12,
+  alignItems: "center",
+  marginBottom: 10,
+},
+
+requestDeclineText: {
+  color: "#B53166",
+  fontWeight: "700",
+  fontSize: 14,
+},
+
+requestDoneButton: {
+  backgroundColor: "#FFE4EC",
+  paddingVertical: 13,
+  borderRadius: 12,
+  alignItems: "center",
+},
+
+requestDoneText: {
+  color: "#B53166",
+  fontWeight: "700",
+  fontSize: 14,
+},
+
+requestSectionHeader: {
+  marginTop: 8,
+},
+
+requestTabs: {
+  flexDirection: "row",
+  backgroundColor: "#FCE4ED",
+  borderRadius: 12,
+  padding: 4,
+  marginBottom: 12,
+},
+
+requestTab: {
+  flex: 1,
+  paddingVertical: 10,
+  alignItems: "center",
+  borderRadius: 9,
+},
+
+requestTabActive: {
+  backgroundColor: "#B53166",
+},
+
+requestTabText: {
+  fontSize: 12,
+  fontWeight: "700",
+  color: "#B53166",
+},
+
+requestTabTextActive: {
+  color: "#FFFFFF",
+},
+
+requestHistoryStatus: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 5,
+  marginTop: 8,
+},
+
+requestHistoryStatusText: {
+  fontSize: 11,
+  fontWeight: "700",
+},
+
+requestHistoryMessage: {
+  fontSize: 13,
+  color: "#775465",
+  textAlign: "center",
+  paddingVertical: 15,
+},
+
+requestHistoryDate: {
+  fontSize: 10,
+  color: "#9F4268",
+  marginTop: 5,
+},
+
+familyModalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.45)",
+  justifyContent: "center",
+  padding: 22,
+},
+
+familyModalCard: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 20,
+  padding: 20,
+  maxHeight: "80%",
+},
+
+familyModalHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 16,
+},
+
+familyModalTitle: {
+  fontSize: 18,
+  fontWeight: "700",
+  color: "#B53166",
+},
+
+familyModalName: {
+  fontSize: 20,
+  fontWeight: "700",
+  color: "#49303C",
+  marginBottom: 6,
+},
+
+familyModalSubtitle: {
+  fontSize: 13,
+  color: "#775465",
+  marginBottom: 18,
+},
+
+familyModalSectionTitle: {
+  fontSize: 15,
+  fontWeight: "700",
+  color: "#B53166",
+  marginTop: 12,
+  marginBottom: 10,
+},
+
+familyModalEmpty: {
+  fontSize: 12,
+  color: "#999999",
+  marginBottom: 10,
+},
+
+familyModalRequest: {
+  backgroundColor: "#FFF1F6",
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 9,
+},
+
+familyModalRequestText: {
+  fontSize: 13,
+  fontWeight: "600",
+  color: "#49303C",
+},
+
+familyModalRequestStatus: {
+  fontSize: 11,
+  color: "#B53166",
+  marginTop: 5,
+},
+
+familyModalDate: {
+  fontSize: 10,
+  color: "#775465",
+  marginTop: 5,
 },
 });
