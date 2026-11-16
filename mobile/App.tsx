@@ -45,6 +45,7 @@ const SELECTED_FOCUS_TASK_KEY = "@quietcue_selected_focus_task";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("splash");
+  const [currentParentName, setCurrentParentName] = useState("");
   const [pendingAccount, setPendingAccount] = useState<{
   fullName: string;
   email: string;
@@ -93,8 +94,21 @@ useEffect(() => {
       const savedSession = await AsyncStorage.getItem(SESSION_KEY);
 
       if (savedSession === "parent") {
-        setScreen("parentHome");
+      const savedAccount = await AsyncStorage.getItem(DEMO_ACCOUNT_KEY);
+
+      if (savedAccount) {
+        const account = JSON.parse(savedAccount);
+
+        if (account?.role === "parent" && account?.fullName) {
+          setCurrentParentName(account.fullName);
+          setScreen("parentHome");
+        } else {
+          await AsyncStorage.removeItem(SESSION_KEY);
+        }
+      } else {
+        await AsyncStorage.removeItem(SESSION_KEY);
       }
+    }
     } catch (error) {
       console.error("Failed to check session:", error);
     } finally {
@@ -182,6 +196,7 @@ useEffect(() => {
       JSON.stringify(demoAccount)
     );
 
+    setCurrentParentName(pendingAccount.fullName);
     setPendingAccount(null);
     setScreen("loading");
   } catch (error) {
@@ -219,6 +234,7 @@ if (screen === "loading") {
           <>
             <StatusBar style="dark" />
             <ParentHomeScreen
+            parentName={currentParentName}
             onTasksPress={() => setScreen("parentTasks")}
             onFocusPress={() => setScreen("parentFocus")}
             onMessagesPress={() => setScreen("parentMessages")}
@@ -395,17 +411,36 @@ onTaskDeleted={async (taskId) => {
       <LoginScreen
         onSignUp={() => setScreen("register")}
         onLogin={async () => {
-          try {
-            await AsyncStorage.setItem(SESSION_KEY, "parent");
-            setScreen("parentHome");
-          } catch (error) {
-            console.error("Login failed:", error);
-            Alert.alert(
-              "Error",
-              "Unable to save your session. Please try again."
-            );
-          }
-        }}
+  try {
+    const savedAccount = await AsyncStorage.getItem(DEMO_ACCOUNT_KEY);
+
+    if (!savedAccount) {
+      Alert.alert(
+        "No Account Found",
+        "Please create a parent account first."
+      );
+      return;
+    }
+
+    const account = JSON.parse(savedAccount);
+
+    if (account?.role !== "parent" || !account?.fullName) {
+      Alert.alert(
+        "Invalid Account",
+        "No valid parent account was found."
+      );
+      return;
+    }
+
+    setCurrentParentName(account.fullName);
+
+    await AsyncStorage.setItem(SESSION_KEY, "parent");
+    setScreen("parentHome");
+  } catch (error) {
+    console.error("Login failed:", error);
+    Alert.alert("Error", "Unable to log in.");
+  }
+}}
       />
     );
     }
